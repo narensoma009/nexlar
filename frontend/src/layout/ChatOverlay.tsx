@@ -64,7 +64,7 @@ export default function ChatOverlay({ onClose }: Props) {
     <div className="fixed bottom-20 right-6 w-[420px] h-[600px] max-h-[80vh] bg-white border border-slate-200 rounded-2xl shadow-2xl flex flex-col z-40">
       <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
         <div>
-          <div className="text-sm font-semibold">Nexlara Chat</div>
+          <div className="text-sm font-semibold">QuoteIQ Chat</div>
           <div className="text-xs text-slate-500">Azure OpenAI · RAG over uploaded CSVs</div>
         </div>
         <button onClick={onClose} className="text-slate-400 hover:text-slate-700 text-xl leading-none">

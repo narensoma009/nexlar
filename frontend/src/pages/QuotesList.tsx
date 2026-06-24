@@ -121,7 +121,7 @@ export default function QuotesList() {
               <Sparkles size={18} />
             </div>
             <div>
-              <div className="text-base font-semibold tracking-tight">Nexlara</div>
+              <div className="text-base font-semibold tracking-tight">QuoteIQ</div>
               <div className="text-[11px] text-slate-500">
                 {isManager ? "Approval queue" : "Quote workspace"}
               </div>

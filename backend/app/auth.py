@@ -14,12 +14,12 @@ from .config import settings
 # Edit / extend SAMPLE_USERS to add more personas.
 
 SAMPLE_USERS: dict[str, dict] = {
-    "ae@nexlara.test": {
+    "ae@quoteiq.test": {
         "password": "Demo123!",
         "name": "Alice Adams",
         "role": "ae",
     },
-    "manager@nexlara.test": {
+    "manager@quoteiq.test": {
         "password": "Demo123!",
         "name": "Marco Manager",
         "role": "manager",

@@ -21,7 +21,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Nexlara", lifespan=lifespan)
+app = FastAPI(title="QuoteIQ", lifespan=lifespan)
 init_db()  # also run at import time so TestClient and reload always have tables
 
 app.add_middleware(

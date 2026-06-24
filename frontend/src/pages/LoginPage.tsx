@@ -6,7 +6,7 @@ import { useAuth } from "../auth/AuthContext";
 const SAMPLES = [
   {
     role: "Account Executive",
-    email: "ae@nexlara.test",
+    email: "ae@quoteiq.test",
     password: "Demo123!",
     icon: Briefcase,
     tone: "bg-blue-100 text-blue-700",
@@ -14,7 +14,7 @@ const SAMPLES = [
   },
   {
     role: "Approving Manager",
-    email: "manager@nexlara.test",
+    email: "manager@quoteiq.test",
     password: "Demo123!",
     icon: ShieldCheck,
     tone: "bg-emerald-100 text-emerald-700",
@@ -56,7 +56,7 @@ export default function LoginPage() {
               <Sparkles size={18} />
             </div>
             <div>
-              <div className="text-lg font-semibold tracking-tight">Nexlara</div>
+              <div className="text-lg font-semibold tracking-tight">QuoteIQ</div>
               <div className="text-xs text-slate-500">Quote workspace · sign in</div>
             </div>
           </div>

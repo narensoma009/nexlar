@@ -1,4 +1,4 @@
-const TOKEN_KEY = "nexlara_token";
+const TOKEN_KEY = "quoteiq_token";
 
 export function getToken(): string | null {
   return localStorage.getItem(TOKEN_KEY);
