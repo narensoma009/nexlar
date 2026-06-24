@@ -3,7 +3,7 @@ import io
 import math
 from typing import Iterable
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from .config import settings
@@ -64,6 +64,8 @@ def ingest_csv(db: Session, filename: str, raw_bytes: bytes) -> Document:
 
 
 def retrieve(db: Session, query: str, top_k: int | None = None) -> list[Chunk]:
+    if not db.execute(select(func.count()).select_from(Chunk)).scalar():
+        return []
     k = top_k or settings.rag_top_k
     qvec = embed_text(query)
     all_chunks = list(db.execute(select(Chunk)).scalars().all())
