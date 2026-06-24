@@ -1,0 +1,124 @@
+# Deploy Nexlara to Azure — full steps
+
+Repo: <https://github.com/odl-user-2285550_clabs/pod6-Nexlara> · RG: `rde-pod6-rg`
+
+---
+
+## 1. Build frontend + commit
+
+```powershell
+cd C:\pod6-Nexlara\frontend
+npm install
+npm run build
+
+cd C:\pod6-Nexlara
+Remove-Item .\backend\static -Recurse -Force -ErrorAction SilentlyContinue
+Copy-Item .\frontend\dist .\backend\static -Recurse
+
+git add -A
+git commit -m "Build frontend"
+git push
+```
+
+---
+
+## 2. Create Postgres
+
+Portal → **Create resource** → **Azure Database for PostgreSQL Flexible Server**
+
+- RG: `rde-pod6-rg`
+- Name: `nexlara-pg-<you>`
+- Workload: Development · Compute: **B1ms** · Postgres **16**
+- Admin: `nexlaraadmin` + strong password *(save it)*
+- Networking: Public access · ✓ **Allow Azure services** · ✓ **Add current client IP**
+- **Create** (~5 min)
+
+When ready:
+- **Server parameters** → `azure.extensions` → add **VECTOR** → **Save**
+- **Databases** → **+ Add** → `nexlara` → **Save**
+
+---
+
+## 3. Create Web App
+
+Portal → **Create resource** → **Web App**
+
+- RG: `rde-pod6-rg`
+- Name: `nexlara-<you>`
+- Publish: **Code** · Stack: **Python 3.11** · OS: **Linux** · Plan: **B1**
+- **Create**
+
+---
+
+## 4. Configure Web App
+
+Web App → **Settings → Configuration**
+
+**General settings** → Startup Command: `startup.sh` → **Save**
+
+**Environment variables** → add each → **Apply**:
+
+| Name | Value |
+|---|---|
+| `AZURE_OPENAI_ENDPOINT` | your endpoint |
+| `AZURE_OPENAI_API_KEY` | your key |
+| `AZURE_OPENAI_DEPLOYMENT` | `gpt-4o` |
+| `AZURE_OPENAI_EMBEDDING_DEPLOYMENT` | `text-embedding-3-small` |
+| `AZURE_OPENAI_API_VERSION` | `2024-10-21` |
+| `EMBEDDING_DIM` | `1536` |
+| `RAG_TOP_K` | `5` |
+| `DATABASE_URL` | `postgresql+psycopg2://nexlaraadmin:PASSWORD@nexlara-pg-<you>.postgres.database.azure.com:5432/nexlara?sslmode=require` |
+| `SCM_DO_BUILD_DURING_DEPLOYMENT` | `true` |
+
+URL-encode special chars in password (`!`→`%21`, `@`→`%40`).
+
+---
+
+## 5. Connect to GitHub
+
+Web App → **Deployment → Deployment Center**
+
+- Source: **External Git**
+- Repository: `https://github.com/odl-user-2285550_clabs/pod6-Nexlara.git`
+- Branch: `main`
+- Repository Type: **Public**
+- **Save** (first sync runs automatically, ~3–5 min)
+
+---
+
+## 6. Verify
+
+- `https://nexlara-<you>.azurewebsites.net/api/health` → `{"status":"ok"}`
+- `https://nexlara-<you>.azurewebsites.net/` → chat UI loads
+- Upload a CSV → ask a question → **Last context used** panel populates
+
+Logs: Web App → **Monitoring → Log stream**
+
+---
+
+## 7. Redeploy after code changes
+
+```powershell
+cd C:\pod6-Nexlara
+# (if frontend changed) rebuild + copy:
+cd frontend; npm run build; cd ..
+Remove-Item .\backend\static -Recurse -Force
+Copy-Item .\frontend\dist .\backend\static -Recurse
+
+git add -A; git commit -m "describe change"; git push
+```
+
+Then Azure portal → **Deployment Center → Sync**.
+
+---
+
+## Common gotchas
+
+| Symptom | Fix |
+|---|---|
+| Frontend missing / 404 at `/` | Forgot to rebuild + commit `backend/static/` |
+| 502 at startup | `startup.sh` not set, or `DATABASE_URL` wrong → check Log stream |
+| `extension "vector" is not allow-listed` | Step 2 server-parameter VECTOR not saved |
+| Sync did nothing | No new commits → force: `git commit --allow-empty -m "redeploy"; git push` |
+| `EMBEDDING_DIM` mismatch | Must match your embedding model dim; changing later requires dropping `chunks` table |
+| Cold start ~30s | Normal on B1 after idle |
