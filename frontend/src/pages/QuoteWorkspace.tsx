@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
+  AlertOctagon,
   ArrowLeft,
   Check,
+  LogOut,
+  RotateCcw,
   Send,
   Sparkles,
   X,
@@ -33,7 +36,7 @@ import { currencyFull } from "../lib/status";
 import { useAuth } from "../auth/AuthContext";
 
 export default function QuoteWorkspace() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const isAE = user?.role === "ae";
   const isManager = user?.role === "manager";
 
@@ -221,7 +224,15 @@ export default function QuoteWorkspace() {
                 onClick={onSubmit}
                 className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white shadow hover:bg-blue-700"
               >
-                <Send size={14} /> Submit for approval
+                {quote?.status === "rejected" ? (
+                  <>
+                    <RotateCcw size={14} /> Resubmit
+                  </>
+                ) : (
+                  <>
+                    <Send size={14} /> Submit for approval
+                  </>
+                )}
               </button>
             )}
             {canDecide && (
@@ -240,13 +251,53 @@ export default function QuoteWorkspace() {
                 </button>
               </>
             )}
+            {user && (
+              <div className="flex items-center gap-2 ml-2 pl-3 border-l border-slate-200">
+                <div className="text-right hidden sm:block">
+                  <div className="text-xs font-medium text-slate-800">{user.name}</div>
+                  <div className="text-[10px] uppercase tracking-wider text-slate-500">
+                    {isManager ? "Manager" : "AE"}
+                  </div>
+                </div>
+                <button
+                  onClick={logout}
+                  title="Sign out"
+                  className="rounded-lg border border-slate-300 bg-white p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-50"
+                >
+                  <LogOut size={14} />
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </header>
 
       {isPending && <ApproverBrief brief={brief} loading={briefLoading} />}
 
-      {quote && (quote.submit_comment || quote.routing_reasons.length > 0 || quote.decision_comment) && (
+      {quote?.status === "rejected" && isAE && (
+        <div className="bg-gradient-to-r from-red-50 to-rose-50 border-y border-red-200">
+          <div className="mx-auto max-w-7xl px-6 py-3 flex items-start gap-3">
+            <div className="h-9 w-9 rounded-xl bg-red-100 text-red-700 flex items-center justify-center shrink-0">
+              <AlertOctagon size={18} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-semibold text-red-800">
+                Manager rejected this quote — action required
+              </div>
+              {quote.decision_comment && (
+                <div className="text-sm text-slate-800 mt-0.5">
+                  <span className="font-medium">Reason:</span> {quote.decision_comment}
+                </div>
+              )}
+              <div className="text-xs text-slate-600 mt-1">
+                Fix the issues below, then click <span className="font-semibold">Resubmit</span> at the top.
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {quote && (quote.submit_comment || quote.routing_reasons.length > 0 || (quote.decision_comment && quote.status !== "rejected")) && (
         <div className="bg-white border-b border-slate-200">
           <div className="mx-auto max-w-7xl px-6 py-3 text-xs text-slate-600 flex flex-col gap-1">
             {quote.submit_comment && (
