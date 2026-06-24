@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     embedding_dim: int = 1536
     rag_top_k: int = 5
 
+    auto_approve_max_value: float = 500_000.0
+
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=False)
 
 

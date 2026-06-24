@@ -4,6 +4,7 @@ import {
   listQuotes,
   createQuote,
   deleteQuote,
+  type QuoteStatus,
   type QuoteSummary,
 } from "../api/quotes";
 import { uploadCatalogue } from "../api/catalogue";
@@ -20,6 +21,24 @@ const UPLOADERS: Record<UploadKind, { label: string; fn: (f: File) => Promise<{ 
   phasing: { label: "Phasing rules", fn: uploadPhasingRules },
   asc606: { label: "ASC-606 rules", fn: uploadAsc606Rules },
   dhi: { label: "DHI codes", fn: uploadDhiCodes },
+};
+
+const STATUS_LABEL: Record<QuoteStatus, string> = {
+  draft: "Draft",
+  submitted: "Submitted",
+  pending_manager: "Pending manager",
+  auto_approved: "Auto-approved",
+  approved: "Approved",
+  rejected: "Rejected",
+};
+
+const STATUS_PILL: Record<QuoteStatus, string> = {
+  draft: "bg-slate-100 text-slate-700",
+  submitted: "bg-blue-50 text-blue-700",
+  pending_manager: "bg-amber-50 text-amber-700 border border-amber-200",
+  auto_approved: "bg-green-50 text-green-700 border border-green-200",
+  approved: "bg-emerald-50 text-emerald-700 border border-emerald-200",
+  rejected: "bg-red-50 text-red-700 border border-red-200",
 };
 
 export default function QuotesList() {
@@ -98,9 +117,53 @@ export default function QuotesList() {
     );
   }
 
+  function QuoteRow({ q }: { q: QuoteSummary }) {
+    return (
+      <li className="flex items-center justify-between py-2 gap-3">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <Link
+              to={`/quotes/${q.id}`}
+              className="text-sm font-medium text-blue-700 hover:underline"
+            >
+              {q.number}
+            </Link>
+            <span className="text-sm text-slate-700">{q.customer}</span>
+            <span className={"text-xs rounded-full px-2 py-0.5 " + STATUS_PILL[q.status]}>
+              {STATUS_LABEL[q.status]}
+            </span>
+          </div>
+          <div className="text-xs text-slate-500 mt-0.5">
+            {q.line_count} line{q.line_count === 1 ? "" : "s"} ·
+            ${q.subtotal.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+            {q.ae && <> · AE {q.ae}</>}
+            {q.decided_by && <> · decided by {q.decided_by}</>}
+          </div>
+          {q.status === "pending_manager" && q.routing_reasons.length > 0 && (
+            <div className="text-xs text-amber-700 mt-0.5">
+              {q.routing_reasons.join("; ")}
+            </div>
+          )}
+        </div>
+        <button
+          onClick={() => onDelete(q.id)}
+          className="text-xs text-red-600 hover:underline"
+        >
+          delete
+        </button>
+      </li>
+    );
+  }
+
+  const drafts = quotes.filter((q) => q.status === "draft" || q.status === "submitted");
+  const pending = quotes.filter((q) => q.status === "pending_manager");
+  const auto = quotes.filter((q) => q.status === "auto_approved");
+  const approved = quotes.filter((q) => q.status === "approved");
+  const rejected = quotes.filter((q) => q.status === "rejected");
+
   return (
     <div className="min-h-screen bg-slate-50">
-      <header className="border-b border-slate-200 bg-white px-6 py-4 flex items-center justify-between">
+      <header className="border-b border-slate-200 bg-white px-6 py-4 flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Nexlara</h1>
           <p className="text-sm text-slate-500">Quote workspace</p>
@@ -142,38 +205,59 @@ export default function QuotesList() {
           </div>
         </section>
 
-        <section className="rounded-2xl bg-white border border-slate-200 p-4">
-          <div className="text-sm font-medium mb-2">Quotes ({quotes.length})</div>
-          {quotes.length === 0 && (
-            <div className="text-sm text-slate-400">No quotes yet.</div>
-          )}
+        <Section
+          title={`Pending manager approval (${pending.length})`}
+          tone="amber"
+          empty="Nothing waiting on a manager."
+        >
           <ul className="flex flex-col divide-y divide-slate-100">
-            {quotes.map((q) => (
-              <li key={q.id} className="flex items-center justify-between py-2">
-                <div className="flex-1 min-w-0">
-                  <Link
-                    to={`/quotes/${q.id}`}
-                    className="text-sm font-medium text-blue-700 hover:underline"
-                  >
-                    {q.number}
-                  </Link>
-                  <span className="text-sm text-slate-700"> · {q.customer}</span>
-                  <span className="text-xs text-slate-400">
-                    {" "}
-                    · {q.line_count} line{q.line_count === 1 ? "" : "s"} · $
-                    {q.subtotal.toFixed(2)} · {q.status}
-                  </span>
-                </div>
-                <button
-                  onClick={() => onDelete(q.id)}
-                  className="text-xs text-red-600 hover:underline"
-                >
-                  delete
-                </button>
-              </li>
+            {pending.map((q) => (
+              <QuoteRow key={q.id} q={q} />
             ))}
           </ul>
-        </section>
+        </Section>
+
+        <Section
+          title={`Auto-approved (${auto.length})`}
+          tone="green"
+          empty="No auto-approved quotes yet."
+        >
+          <ul className="flex flex-col divide-y divide-slate-100">
+            {auto.map((q) => (
+              <QuoteRow key={q.id} q={q} />
+            ))}
+          </ul>
+        </Section>
+
+        {approved.length > 0 && (
+          <Section title={`Approved (${approved.length})`} tone="emerald">
+            <ul className="flex flex-col divide-y divide-slate-100">
+              {approved.map((q) => (
+                <QuoteRow key={q.id} q={q} />
+              ))}
+            </ul>
+          </Section>
+        )}
+
+        {drafts.length > 0 && (
+          <Section title={`Drafts (${drafts.length})`} tone="slate">
+            <ul className="flex flex-col divide-y divide-slate-100">
+              {drafts.map((q) => (
+                <QuoteRow key={q.id} q={q} />
+              ))}
+            </ul>
+          </Section>
+        )}
+
+        {rejected.length > 0 && (
+          <Section title={`Rejected (${rejected.length})`} tone="red">
+            <ul className="flex flex-col divide-y divide-slate-100">
+              {rejected.map((q) => (
+                <QuoteRow key={q.id} q={q} />
+              ))}
+            </ul>
+          </Section>
+        )}
 
         {error && (
           <div className="rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
@@ -182,5 +266,36 @@ export default function QuotesList() {
         )}
       </main>
     </div>
+  );
+}
+
+const TONE: Record<string, string> = {
+  amber: "border-amber-200",
+  green: "border-green-200",
+  emerald: "border-emerald-200",
+  slate: "border-slate-200",
+  red: "border-red-200",
+};
+
+function Section({
+  title,
+  tone,
+  empty,
+  children,
+}: {
+  title: string;
+  tone: keyof typeof TONE;
+  empty?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className={"rounded-2xl bg-white p-4 border " + TONE[tone]}>
+      <div className="text-sm font-medium mb-2">{title}</div>
+      {empty && (children as any)?.props?.children?.length === 0 ? (
+        <div className="text-sm text-slate-400">{empty}</div>
+      ) : (
+        children
+      )}
+    </section>
   );
 }

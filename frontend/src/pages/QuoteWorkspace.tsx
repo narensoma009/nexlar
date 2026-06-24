@@ -1,6 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { addLine, getQuote, type QuoteDetail } from "../api/quotes";
+import {
+  addLine,
+  approveQuote,
+  getQuote,
+  rejectQuote,
+  submitQuote,
+  type QuoteDetail,
+  type QuoteStatus,
+} from "../api/quotes";
 import { type CatalogueItem } from "../api/catalogue";
 import {
   attachDhi,
@@ -11,6 +19,15 @@ import {
 import CatalogueBrowser from "../components/quote/CatalogueBrowser";
 import LinesPanel from "../components/quote/LinesPanel";
 import IssuesPanel from "../components/quote/IssuesPanel";
+
+const STATUS_PILL: Record<QuoteStatus, string> = {
+  draft: "bg-slate-100 text-slate-700",
+  submitted: "bg-blue-50 text-blue-700",
+  pending_manager: "bg-amber-50 text-amber-700 border border-amber-200",
+  auto_approved: "bg-green-50 text-green-700 border border-green-200",
+  approved: "bg-emerald-50 text-emerald-700 border border-emerald-200",
+  rejected: "bg-red-50 text-red-700 border border-red-200",
+};
 
 export default function QuoteWorkspace() {
   const { id } = useParams<{ id: string }>();
@@ -74,6 +91,52 @@ export default function QuoteWorkspace() {
     }
   }
 
+  async function onSubmit() {
+    const comment = prompt(
+      "Submit comment for management (required to auto-approve):",
+      quote?.submit_comment || "",
+    );
+    if (comment === null) return;
+    setError(null);
+    try {
+      await runValidation(quoteId); // refresh validations so the routing decision uses latest
+      await submitQuote(quoteId, comment);
+      await refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Unknown error");
+    }
+  }
+
+  async function onApprove() {
+    const decided_by = prompt("Manager name:");
+    if (decided_by === null) return;
+    const decision_comment = prompt("Approval comment (optional):") ?? "";
+    setError(null);
+    try {
+      await approveQuote(quoteId, decided_by, decision_comment);
+      await refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Unknown error");
+    }
+  }
+
+  async function onReject() {
+    const decided_by = prompt("Manager name:");
+    if (decided_by === null) return;
+    const decision_comment = prompt("Rejection comment (required):");
+    if (decision_comment === null || !decision_comment.trim()) {
+      setError("Rejection comment is required");
+      return;
+    }
+    setError(null);
+    try {
+      await rejectQuote(quoteId, decided_by, decision_comment);
+      await refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Unknown error");
+    }
+  }
+
   const lineLabelMap = useMemo(() => {
     const m = new Map<number, string>();
     quote?.lines.forEach((ln) => m.set(ln.id, `${ln.sku_id} (${ln.sku_name})`));
@@ -82,22 +145,83 @@ export default function QuoteWorkspace() {
   const lineLabel = (id: number | null) =>
     id === null ? "" : (lineLabelMap.get(id) ?? `#${id}`);
 
+  const isPending = quote?.status === "pending_manager";
+  const canSubmit =
+    quote &&
+    (quote.status === "draft" ||
+      quote.status === "pending_manager" ||
+      quote.status === "rejected");
+
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
-      <header className="border-b border-slate-200 bg-white px-6 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-3">
+      <header className="border-b border-slate-200 bg-white px-6 py-3 flex items-center justify-between flex-wrap gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           <Link to="/" className="text-sm text-slate-500 hover:text-slate-800">
             ← Quotes
           </Link>
           <div className="text-sm font-semibold">
             {quote?.number ?? "…"} · {quote?.customer ?? "…"}
           </div>
-          <span className="text-xs text-slate-500">{quote?.status}</span>
+          {quote && (
+            <span className={"text-xs rounded-full px-2 py-0.5 " + STATUS_PILL[quote.status]}>
+              {quote.status}
+            </span>
+          )}
         </div>
-        <div className="text-sm font-medium">
-          Subtotal: ${(quote?.subtotal ?? 0).toFixed(2)}
+        <div className="flex items-center gap-3">
+          <div className="text-sm font-medium">
+            Subtotal: ${(quote?.subtotal ?? 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+          </div>
+          {canSubmit && (
+            <button
+              onClick={onSubmit}
+              className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white"
+            >
+              Submit for approval
+            </button>
+          )}
+          {isPending && (
+            <>
+              <button
+                onClick={onApprove}
+                className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white"
+              >
+                Approve
+              </button>
+              <button
+                onClick={onReject}
+                className="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium text-white"
+              >
+                Reject
+              </button>
+            </>
+          )}
         </div>
       </header>
+
+      {quote && (quote.submit_comment || quote.routing_reasons.length > 0 || quote.decision_comment) && (
+        <div className="bg-white border-b border-slate-200 px-6 py-3 text-xs text-slate-600 flex flex-col gap-1">
+          {quote.submit_comment && (
+            <div>
+              <span className="font-medium text-slate-700">Submit comment:</span> {quote.submit_comment}
+            </div>
+          )}
+          {quote.routing_reasons.length > 0 && (
+            <div className="text-amber-700">
+              <span className="font-medium">Routing reasons:</span> {quote.routing_reasons.join("; ")}
+            </div>
+          )}
+          {quote.decision_comment && (
+            <div>
+              <span className="font-medium text-slate-700">
+                {quote.status === "rejected" ? "Rejection" : "Approval"} note
+                {quote.decided_by && ` (by ${quote.decided_by})`}:
+              </span>{" "}
+              {quote.decision_comment}
+            </div>
+          )}
+        </div>
+      )}
 
       <main className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[320px_1fr_360px] gap-4 p-4">
         <aside className="min-h-[60vh]">

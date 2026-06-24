@@ -3,11 +3,12 @@ from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func as sqlfunc, select
 from sqlalchemy.orm import Session
 
+from .config import settings
 from .db import get_session
-from .models import Catalogue, Quote, QuoteLine
+from .models import Catalogue, Quote, QuoteLine, Validation
 
 router = APIRouter()
 
@@ -67,12 +68,27 @@ class QuoteOut(BaseModel):
     updated_at: datetime
     line_count: int
     subtotal: float
+    submit_comment: str = ""
+    submitted_at: datetime | None = None
+    routing_reasons: list[str] = []
+    decided_by: str = ""
+    decided_at: datetime | None = None
+    decision_comment: str = ""
 
     model_config = {"from_attributes": True}
 
 
 class QuoteDetailOut(QuoteOut):
     lines: list[QuoteLineOut]
+
+
+class SubmitIn(BaseModel):
+    submit_comment: str = ""
+
+
+class DecisionIn(BaseModel):
+    decided_by: str = ""
+    decision_comment: str = ""
 
 
 # ─── Helpers ───────────────────────────────────────────────────────────────
@@ -125,6 +141,12 @@ def _quote_summary(quote: Quote, db: Session) -> QuoteOut:
         updated_at=quote.updated_at,
         line_count=len(quote.lines),
         subtotal=float(subtotal),
+        submit_comment=quote.submit_comment or "",
+        submitted_at=quote.submitted_at,
+        routing_reasons=list(quote.routing_reasons or []),
+        decided_by=quote.decided_by or "",
+        decided_at=quote.decided_at,
+        decision_comment=quote.decision_comment or "",
     )
 
 
@@ -261,3 +283,115 @@ def delete_line(
         raise HTTPException(status_code=404, detail="Line not found")
     db.delete(line)
     db.commit()
+
+
+# ─── Approval flow ─────────────────────────────────────────────────────────
+
+
+def _evaluate_routing(quote: Quote, db: Session) -> tuple[str, list[str]]:
+    """Decide auto_approved vs pending_manager. Returns (status, reasons)."""
+    reasons: list[str] = []
+
+    if not quote.lines:
+        reasons.append("Quote has no lines")
+
+    if not (quote.submit_comment or "").strip():
+        reasons.append("Submit comment is required")
+
+    missing_just = [ln for ln in quote.lines if not (ln.justification or "").strip()]
+    if missing_just:
+        reasons.append(
+            f"{len(missing_just)} line(s) missing justification: "
+            + ", ".join(ln.sku_id for ln in missing_just[:5])
+        )
+
+    open_blocks = db.execute(
+        select(sqlfunc.count())
+        .select_from(Validation)
+        .where(
+            Validation.quote_id == quote.id,
+            Validation.state == "open",
+            Validation.severity == "block",
+        )
+    ).scalar() or 0
+    if open_blocks:
+        reasons.append(f"{open_blocks} open blocker(s)")
+
+    summary = _quote_summary(quote, db)
+    if summary.subtotal >= settings.auto_approve_max_value:
+        reasons.append(
+            f"Subtotal ${summary.subtotal:,.2f} exceeds auto-approve threshold "
+            f"${settings.auto_approve_max_value:,.0f}"
+        )
+
+    status = "auto_approved" if not reasons else "pending_manager"
+    return status, reasons
+
+
+@router.post("/quotes/{quote_id}/submit", response_model=QuoteDetailOut)
+def submit_quote(
+    quote_id: int, body: SubmitIn, db: Session = Depends(get_session)
+) -> QuoteDetailOut:
+    quote = db.get(Quote, quote_id)
+    if not quote:
+        raise HTTPException(status_code=404, detail="Quote not found")
+    if quote.status not in ("draft", "pending_manager", "rejected"):
+        raise HTTPException(
+            status_code=409, detail=f"Cannot submit a quote in status '{quote.status}'"
+        )
+    quote.submit_comment = body.submit_comment or ""
+    quote.submitted_at = datetime.utcnow()
+    quote.decided_by = ""
+    quote.decided_at = None
+    quote.decision_comment = ""
+
+    status, reasons = _evaluate_routing(quote, db)
+    quote.status = status
+    quote.routing_reasons = reasons
+    db.commit()
+    db.refresh(quote)
+    return _quote_detail(quote, db)
+
+
+@router.post("/quotes/{quote_id}/approve", response_model=QuoteDetailOut)
+def approve_quote(
+    quote_id: int, body: DecisionIn, db: Session = Depends(get_session)
+) -> QuoteDetailOut:
+    quote = db.get(Quote, quote_id)
+    if not quote:
+        raise HTTPException(status_code=404, detail="Quote not found")
+    if quote.status != "pending_manager":
+        raise HTTPException(
+            status_code=409,
+            detail=f"Only pending_manager quotes can be approved (status={quote.status})",
+        )
+    quote.status = "approved"
+    quote.decided_by = (body.decided_by or "").strip()
+    quote.decided_at = datetime.utcnow()
+    quote.decision_comment = body.decision_comment or ""
+    db.commit()
+    db.refresh(quote)
+    return _quote_detail(quote, db)
+
+
+@router.post("/quotes/{quote_id}/reject", response_model=QuoteDetailOut)
+def reject_quote(
+    quote_id: int, body: DecisionIn, db: Session = Depends(get_session)
+) -> QuoteDetailOut:
+    quote = db.get(Quote, quote_id)
+    if not quote:
+        raise HTTPException(status_code=404, detail="Quote not found")
+    if quote.status != "pending_manager":
+        raise HTTPException(
+            status_code=409,
+            detail=f"Only pending_manager quotes can be rejected (status={quote.status})",
+        )
+    if not (body.decision_comment or "").strip():
+        raise HTTPException(status_code=400, detail="A rejection comment is required")
+    quote.status = "rejected"
+    quote.decided_by = (body.decided_by or "").strip()
+    quote.decided_at = datetime.utcnow()
+    quote.decision_comment = body.decision_comment
+    db.commit()
+    db.refresh(quote)
+    return _quote_detail(quote, db)

@@ -64,7 +64,14 @@ class Catalogue(Base):
     raw_metadata: Mapped[dict] = mapped_column(JSON, default=dict)
 
 
-QUOTE_STATUSES = ("draft", "submitted", "auto_approved", "needs_review", "approved", "rejected")
+QUOTE_STATUSES = (
+    "draft",
+    "submitted",
+    "auto_approved",
+    "pending_manager",
+    "approved",
+    "rejected",
+)
 
 
 class Quote(Base):
@@ -77,6 +84,12 @@ class Quote(Base):
     status: Mapped[str] = mapped_column(
         Enum(*QUOTE_STATUSES, name="quote_status"), default="draft"
     )
+    submit_comment: Mapped[str] = mapped_column(Text, default="")
+    submitted_at: Mapped[datetime | None] = mapped_column(DateTime)
+    routing_reasons: Mapped[list[str]] = mapped_column(JSON, default=list)
+    decided_by: Mapped[str] = mapped_column(String(128), default="")
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime)
+    decision_comment: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), onupdate=func.now()
