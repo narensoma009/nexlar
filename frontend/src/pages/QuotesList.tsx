@@ -1,10 +1,20 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
+  AlertOctagon,
+  ClipboardList,
+  Clock,
+  FileText,
+  Plus,
+  ShieldCheck,
+  Sparkles,
+  Trash2,
+  Upload,
+} from "lucide-react";
+import {
   listQuotes,
   createQuote,
   deleteQuote,
-  type QuoteStatus,
   type QuoteSummary,
 } from "../api/quotes";
 import { uploadCatalogue } from "../api/catalogue";
@@ -13,32 +23,20 @@ import {
   uploadDhiCodes,
   uploadPhasingRules,
 } from "../api/validations";
+import StatusBadge from "../components/StatusBadge";
+import StatCard from "../components/StatCard";
+import { currencyFull } from "../lib/status";
 
 type UploadKind = "catalogue" | "phasing" | "asc606" | "dhi";
 
-const UPLOADERS: Record<UploadKind, { label: string; fn: (f: File) => Promise<{ inserted: number; updated: number }> }> = {
+const UPLOADERS: Record<
+  UploadKind,
+  { label: string; fn: (f: File) => Promise<{ inserted: number; updated: number }> }
+> = {
   catalogue: { label: "Catalogue", fn: uploadCatalogue },
   phasing: { label: "Phasing rules", fn: uploadPhasingRules },
   asc606: { label: "ASC-606 rules", fn: uploadAsc606Rules },
   dhi: { label: "DHI codes", fn: uploadDhiCodes },
-};
-
-const STATUS_LABEL: Record<QuoteStatus, string> = {
-  draft: "Draft",
-  submitted: "Submitted",
-  pending_manager: "Pending manager",
-  auto_approved: "Auto-approved",
-  approved: "Approved",
-  rejected: "Rejected",
-};
-
-const STATUS_PILL: Record<QuoteStatus, string> = {
-  draft: "bg-slate-100 text-slate-700",
-  submitted: "bg-blue-50 text-blue-700",
-  pending_manager: "bg-amber-50 text-amber-700 border border-amber-200",
-  auto_approved: "bg-green-50 text-green-700 border border-green-200",
-  approved: "bg-emerald-50 text-emerald-700 border border-emerald-200",
-  rejected: "bg-red-50 text-red-700 border border-red-200",
 };
 
 export default function QuotesList() {
@@ -99,167 +97,177 @@ export default function QuotesList() {
     }
   }
 
-  function UploadButton({ kind }: { kind: UploadKind }) {
-    return (
-      <label className="text-xs cursor-pointer rounded-lg border border-slate-300 px-3 py-1.5 hover:bg-slate-100">
-        {UPLOADERS[kind].label}
-        <input
-          type="file"
-          accept=".csv,text/csv"
-          className="hidden"
-          onChange={(e) => {
-            const f = e.target.files?.[0];
-            if (f) onUpload(kind, f);
-            e.target.value = "";
-          }}
-        />
-      </label>
-    );
-  }
-
-  function QuoteRow({ q }: { q: QuoteSummary }) {
-    return (
-      <li className="flex items-center justify-between py-2 gap-3">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <Link
-              to={`/quotes/${q.id}`}
-              className="text-sm font-medium text-blue-700 hover:underline"
-            >
-              {q.number}
-            </Link>
-            <span className="text-sm text-slate-700">{q.customer}</span>
-            <span className={"text-xs rounded-full px-2 py-0.5 " + STATUS_PILL[q.status]}>
-              {STATUS_LABEL[q.status]}
-            </span>
-          </div>
-          <div className="text-xs text-slate-500 mt-0.5">
-            {q.line_count} line{q.line_count === 1 ? "" : "s"} ·
-            ${q.subtotal.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-            {q.ae && <> · AE {q.ae}</>}
-            {q.decided_by && <> · decided by {q.decided_by}</>}
-          </div>
-          {q.status === "pending_manager" && q.routing_reasons.length > 0 && (
-            <div className="text-xs text-amber-700 mt-0.5">
-              {q.routing_reasons.join("; ")}
-            </div>
-          )}
-        </div>
-        <button
-          onClick={() => onDelete(q.id)}
-          className="text-xs text-red-600 hover:underline"
-        >
-          delete
-        </button>
-      </li>
-    );
-  }
-
   const drafts = quotes.filter((q) => q.status === "draft" || q.status === "submitted");
   const pending = quotes.filter((q) => q.status === "pending_manager");
   const auto = quotes.filter((q) => q.status === "auto_approved");
   const approved = quotes.filter((q) => q.status === "approved");
   const rejected = quotes.filter((q) => q.status === "rejected");
 
+  const pipelineValue = pending.reduce((s, q) => s + q.subtotal, 0);
+  const approvedValue = approved.reduce((s, q) => s + q.subtotal, 0) +
+    auto.reduce((s, q) => s + q.subtotal, 0);
+
   return (
-    <div className="min-h-screen bg-slate-50">
-      <header className="border-b border-slate-200 bg-white px-6 py-4 flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">Nexlara</h1>
-          <p className="text-sm text-slate-500">Quote workspace</p>
-        </div>
-        <div className="flex flex-wrap gap-2 items-center">
-          <span className="text-xs text-slate-400 mr-1">Upload CSV:</span>
-          <UploadButton kind="catalogue" />
-          <UploadButton kind="phasing" />
-          <UploadButton kind="asc606" />
-          <UploadButton kind="dhi" />
+    <div className="min-h-screen">
+      <header className="sticky top-0 z-20 backdrop-blur bg-white/80 border-b border-slate-200">
+        <div className="mx-auto max-w-6xl px-6 py-3 flex items-center justify-between flex-wrap gap-3">
+          <div className="flex items-center gap-2">
+            <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white">
+              <Sparkles size={18} />
+            </div>
+            <div>
+              <div className="text-base font-semibold tracking-tight">Nexlara</div>
+              <div className="text-[11px] text-slate-500">Quote workspace</div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            {(Object.keys(UPLOADERS) as UploadKind[]).map((k) => (
+              <label
+                key={k}
+                className="inline-flex items-center gap-1.5 text-xs cursor-pointer rounded-lg border border-slate-300 px-2.5 py-1.5 bg-white hover:bg-slate-50 shadow-sm"
+              >
+                <Upload size={13} />
+                {UPLOADERS[k].label}
+                <input
+                  type="file"
+                  accept=".csv,text/csv"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) onUpload(k, f);
+                    e.target.value = "";
+                  }}
+                />
+              </label>
+            ))}
+          </div>
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-5xl px-4 py-6 flex flex-col gap-6">
-        {uploadStatus && <div className="text-xs text-slate-500">{uploadStatus}</div>}
+      <main className="mx-auto max-w-6xl px-6 py-6 flex flex-col gap-6">
+        {uploadStatus && (
+          <div className="text-xs text-slate-500 bg-white border border-slate-200 rounded-lg px-3 py-1.5 inline-flex w-fit">
+            {uploadStatus}
+          </div>
+        )}
 
-        <section className="rounded-2xl bg-white border border-slate-200 p-4 flex flex-col gap-2">
-          <div className="text-sm font-medium">New quote</div>
+        {/* Stats hero */}
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <StatCard
+            icon={AlertOctagon}
+            label="AE action (rejected)"
+            value={rejected.length}
+            tone="red"
+            sub={rejected.length === 0 ? "All clear" : "Open and resubmit"}
+          />
+          <StatCard
+            icon={Clock}
+            label="Pending manager"
+            value={pending.length}
+            tone="amber"
+            sub={pipelineValue > 0 ? currencyFull(pipelineValue) + " in pipeline" : "—"}
+          />
+          <StatCard
+            icon={ShieldCheck}
+            label="Auto-approved"
+            value={auto.length}
+            tone="green"
+          />
+          <StatCard
+            icon={ClipboardList}
+            label="Approved"
+            value={approved.length}
+            tone="emerald"
+            sub={approvedValue > 0 ? currencyFull(approvedValue) + " booked" : "—"}
+          />
+          <StatCard
+            icon={FileText}
+            label="Drafts"
+            value={drafts.length}
+            tone="slate"
+          />
+        </div>
+
+        {/* New quote */}
+        <section className="rounded-2xl bg-white border border-slate-200 p-4 shadow-sm">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="h-7 w-7 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center">
+              <Plus size={16} />
+            </div>
+            <div className="text-sm font-medium">New quote</div>
+          </div>
           <div className="flex flex-wrap gap-2">
             <input
               value={customer}
               onChange={(e) => setCustomer(e.target.value)}
               placeholder="Customer"
-              className="flex-1 min-w-[200px] rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
+              className="flex-1 min-w-[220px] rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
             <input
               value={ae}
               onChange={(e) => setAe(e.target.value)}
               placeholder="AE (optional)"
-              className="min-w-[160px] rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
+              className="min-w-[180px] rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
             <button
               onClick={onCreate}
               disabled={busy || !customer.trim()}
-              className="rounded-lg bg-blue-600 px-4 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow hover:bg-blue-700 disabled:opacity-50"
             >
-              Create
+              <Plus size={16} /> Create
             </button>
           </div>
         </section>
 
+        {/* Sections */}
         <Section
-          title={`AE action required: rejected (${rejected.length})`}
-          tone="red"
+          title="AE action required — rejected"
           subtitle="Open each quote to address the manager's notes, then re-submit."
+          tone="red"
+          count={rejected.length}
           empty="No rejected quotes — nothing to act on."
         >
-          <ul className="flex flex-col divide-y divide-slate-100">
-            {rejected.map((q) => (
-              <QuoteRow key={q.id} q={q} />
-            ))}
-          </ul>
+          {rejected.map((q) => (
+            <QuoteRow key={q.id} q={q} onDelete={() => onDelete(q.id)} />
+          ))}
         </Section>
 
         <Section
-          title={`Pending manager approval (${pending.length})`}
+          title="Pending manager approval"
+          subtitle="Each quote includes an LLM-generated approver brief with a risk score."
           tone="amber"
-          subtitle="Each quote includes an approver brief with a risk score and recommendation."
+          count={pending.length}
           empty="Nothing waiting on a manager."
         >
-          <ul className="flex flex-col divide-y divide-slate-100">
-            {pending.map((q) => (
-              <QuoteRow key={q.id} q={q} />
-            ))}
-          </ul>
+          {pending.map((q) => (
+            <QuoteRow key={q.id} q={q} onDelete={() => onDelete(q.id)} />
+          ))}
         </Section>
 
         <Section
-          title={`Auto-approved (${auto.length})`}
+          title="Auto-approved"
           tone="green"
+          count={auto.length}
           empty="No auto-approved quotes yet."
         >
-          <ul className="flex flex-col divide-y divide-slate-100">
-            {auto.map((q) => (
-              <QuoteRow key={q.id} q={q} />
-            ))}
-          </ul>
+          {auto.map((q) => (
+            <QuoteRow key={q.id} q={q} onDelete={() => onDelete(q.id)} />
+          ))}
         </Section>
 
         {approved.length > 0 && (
-          <Section title={`Approved (${approved.length})`} tone="emerald">
-            <ul className="flex flex-col divide-y divide-slate-100">
-              {approved.map((q) => (
-                <QuoteRow key={q.id} q={q} />
-              ))}
-            </ul>
+          <Section title="Approved" tone="emerald" count={approved.length}>
+            {approved.map((q) => (
+              <QuoteRow key={q.id} q={q} onDelete={() => onDelete(q.id)} />
+            ))}
           </Section>
         )}
 
         {drafts.length > 0 && (
-          <Section title={`Drafts (${drafts.length})`} tone="slate">
-            <ul className="flex flex-col divide-y divide-slate-100">
-              {drafts.map((q) => (
-                <QuoteRow key={q.id} q={q} />
-              ))}
-            </ul>
+          <Section title="Drafts" tone="slate" count={drafts.length}>
+            {drafts.map((q) => (
+              <QuoteRow key={q.id} q={q} onDelete={() => onDelete(q.id)} />
+            ))}
           </Section>
         )}
 
@@ -273,39 +281,91 @@ export default function QuotesList() {
   );
 }
 
-const TONE: Record<string, string> = {
-  amber: "border-amber-200",
-  green: "border-green-200",
-  emerald: "border-emerald-200",
-  slate: "border-slate-200",
-  red: "border-red-200",
+const TONE: Record<string, { ring: string; dot: string }> = {
+  amber: { ring: "border-amber-200", dot: "bg-amber-500" },
+  green: { ring: "border-green-200", dot: "bg-green-500" },
+  emerald: { ring: "border-emerald-200", dot: "bg-emerald-500" },
+  slate: { ring: "border-slate-200", dot: "bg-slate-400" },
+  red: { ring: "border-red-200", dot: "bg-red-500" },
 };
 
 function Section({
   title,
-  tone,
-  empty,
   subtitle,
+  tone,
+  count,
+  empty,
   children,
 }: {
   title: string;
-  tone: keyof typeof TONE;
-  empty?: string;
   subtitle?: string;
+  tone: keyof typeof TONE;
+  count: number;
+  empty?: string;
   children: React.ReactNode;
 }) {
-  const childCount = (children as any)?.props?.children?.length ?? 0;
+  const childArr = Array.isArray(children) ? children : [children];
+  const isEmpty = childArr.flat().filter(Boolean).length === 0;
   return (
-    <section className={"rounded-2xl bg-white p-4 border " + TONE[tone]}>
-      <div className="flex flex-col mb-2">
-        <div className="text-sm font-medium">{title}</div>
-        {subtitle && <div className="text-xs text-slate-500">{subtitle}</div>}
+    <section className={"rounded-2xl bg-white p-4 border shadow-sm " + TONE[tone].ring}>
+      <div className="flex items-baseline gap-2 mb-3">
+        <span className={"inline-block h-2 w-2 rounded-full " + TONE[tone].dot} />
+        <div className="text-sm font-semibold">{title}</div>
+        <span className="text-xs text-slate-400">({count})</span>
+        {subtitle && <div className="text-xs text-slate-500 ml-auto">{subtitle}</div>}
       </div>
-      {empty && childCount === 0 ? (
-        <div className="text-sm text-slate-400">{empty}</div>
+      {isEmpty && empty ? (
+        <div className="text-sm text-slate-400 italic px-1">{empty}</div>
       ) : (
-        children
+        <ul className="flex flex-col gap-2">{children}</ul>
       )}
     </section>
+  );
+}
+
+function QuoteRow({ q, onDelete }: { q: QuoteSummary; onDelete: () => void }) {
+  return (
+    <li>
+      <Link
+        to={`/quotes/${q.id}`}
+        className="group flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5 hover:border-blue-300 hover:bg-blue-50/40 transition"
+      >
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-mono text-xs px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">
+              {q.number}
+            </span>
+            <span className="text-sm font-medium text-slate-900 truncate">{q.customer}</span>
+            <StatusBadge status={q.status} />
+          </div>
+          <div className="text-xs text-slate-500 mt-1 flex flex-wrap gap-x-3">
+            <span>{q.line_count} line{q.line_count === 1 ? "" : "s"}</span>
+            <span>{currencyFull(q.subtotal)}</span>
+            {q.ae && <span>AE {q.ae}</span>}
+            {q.decided_by && <span>decided by {q.decided_by}</span>}
+          </div>
+          {q.status === "pending_manager" && q.routing_reasons.length > 0 && (
+            <div className="text-xs text-amber-700 mt-1 line-clamp-1">
+              {q.routing_reasons.join("; ")}
+            </div>
+          )}
+          {q.status === "rejected" && q.decision_comment && (
+            <div className="text-xs text-red-700 mt-1 line-clamp-1">
+              Manager: {q.decision_comment}
+            </div>
+          )}
+        </div>
+        <button
+          onClick={(e) => {
+            e.preventDefault();
+            onDelete();
+          }}
+          className="opacity-0 group-hover:opacity-100 transition text-slate-400 hover:text-red-600 p-1"
+          title="Delete"
+        >
+          <Trash2 size={14} />
+        </button>
+      </Link>
+    </li>
   );
 }

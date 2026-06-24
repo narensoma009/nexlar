@@ -1,5 +1,7 @@
 import { useState } from "react";
+import { Hash, Layers, ListChecks, Tag, Trash2 } from "lucide-react";
 import { deleteLine, updateLine, type QuoteLine } from "../../api/quotes";
+import { currencyFull } from "../../lib/status";
 
 type Props = {
   quoteId: number;
@@ -38,56 +40,74 @@ export default function LinesPanel({ quoteId, lines, onChange, onAttachDhi }: Pr
   }
 
   return (
-    <div className="flex flex-col gap-2 h-full min-h-0">
-      <div className="text-sm font-medium">Lines ({lines.length})</div>
-      <div className="flex-1 min-h-0 overflow-y-auto rounded-lg border border-slate-200 bg-white">
+    <div className="flex flex-col gap-2 h-full min-h-0 rounded-2xl bg-white border border-slate-200 shadow-sm p-3">
+      <div className="flex items-center gap-2">
+        <div className="h-7 w-7 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center">
+          <ListChecks size={16} />
+        </div>
+        <div className="text-sm font-semibold">Lines</div>
+        <span className="text-xs text-slate-400">({lines.length})</span>
+      </div>
+
+      <div className="flex-1 min-h-0 overflow-y-auto">
         {lines.length === 0 ? (
-          <div className="p-3 text-xs text-slate-400">
+          <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm text-slate-400">
             Click a catalogue item on the left to add a line.
           </div>
         ) : (
-          <ul className="divide-y divide-slate-100">
+          <ul className="flex flex-col gap-2">
             {lines.map((ln) => {
               const phaseOk =
-                ln.allowed_phases.length === 0 ||
-                ln.allowed_phases.includes(ln.phase);
+                ln.allowed_phases.length === 0 || ln.allowed_phases.includes(ln.phase);
               const justOk = (ln.justification || "").trim().length > 0;
               const qtyOk = ln.qty >= 1;
               return (
-                <li key={ln.id} className="p-3 flex flex-col gap-2">
+                <li
+                  key={ln.id}
+                  className="rounded-xl border border-slate-200 bg-white p-3 flex flex-col gap-2 hover:border-slate-300 transition"
+                >
                   <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="text-sm font-medium truncate">
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm font-semibold truncate text-slate-900">
                         {ln.sku_name}
                       </div>
-                      <div className="text-xs text-slate-500">
-                        {ln.sku_id} · {ln.family} · ${ln.unit_price.toFixed(2)} ea
+                      <div className="text-[11px] text-slate-500 flex flex-wrap gap-x-2 mt-0.5">
+                        <span className="font-mono">{ln.sku_id}</span>
+                        <span>·</span>
+                        <span>{ln.family}</span>
+                        <span>·</span>
+                        <span>{currencyFull(ln.unit_price)} ea</span>
                       </div>
                     </div>
-                    <div className="text-sm font-medium whitespace-nowrap">
-                      ${ln.line_total.toFixed(2)}
-                    </div>
-                    <div className="flex flex-col items-end gap-1 text-xs">
-                      {onAttachDhi && (
+                    <div className="text-right">
+                      <div className="text-sm font-semibold text-slate-900 whitespace-nowrap">
+                        {currencyFull(ln.line_total)}
+                      </div>
+                      <div className="mt-1 flex justify-end gap-2">
+                        {onAttachDhi && (
+                          <button
+                            onClick={() => onAttachDhi(ln.id)}
+                            className="text-[11px] text-slate-500 hover:text-blue-600 hover:underline"
+                          >
+                            + DHI code
+                          </button>
+                        )}
                         <button
-                          onClick={() => onAttachDhi(ln.id)}
-                          className="text-slate-500 hover:underline"
+                          disabled={busy === ln.id}
+                          onClick={() => remove(ln.id)}
+                          className="text-slate-400 hover:text-red-600 disabled:opacity-50"
+                          title="Remove line"
                         >
-                          + DHI code
+                          <Trash2 size={14} />
                         </button>
-                      )}
-                      <button
-                        disabled={busy === ln.id}
-                        onClick={() => remove(ln.id)}
-                        className="text-red-600 hover:underline disabled:opacity-50"
-                      >
-                        remove
-                      </button>
+                      </div>
                     </div>
                   </div>
+
                   <div className="flex flex-wrap items-center gap-2 text-xs">
-                    <label className="flex items-center gap-1">
-                      qty
+                    <label className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2 py-1 bg-slate-50">
+                      <Hash size={11} className="text-slate-400" />
+                      <span className="text-slate-500">qty</span>
                       <input
                         type="number"
                         min={1}
@@ -96,15 +116,14 @@ export default function LinesPanel({ quoteId, lines, onChange, onAttachDhi }: Pr
                           patch(ln.id, { qty: Number(e.target.value) || 1 })
                         }
                         className={
-                          "w-16 rounded border px-2 py-0.5 " +
-                          (qtyOk
-                            ? "border-slate-300"
-                            : "border-red-400 bg-red-50")
+                          "w-14 rounded border px-1 py-0.5 text-center " +
+                          (qtyOk ? "border-slate-300" : "border-red-400 bg-red-50")
                         }
                       />
                     </label>
-                    <label className="flex items-center gap-1">
-                      phase
+                    <label className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2 py-1 bg-slate-50">
+                      <Layers size={11} className="text-slate-400" />
+                      <span className="text-slate-500">phase</span>
                       <input
                         type="number"
                         min={1}
@@ -113,7 +132,7 @@ export default function LinesPanel({ quoteId, lines, onChange, onAttachDhi }: Pr
                           patch(ln.id, { phase: Number(e.target.value) || 1 })
                         }
                         className={
-                          "w-14 rounded border px-2 py-0.5 " +
+                          "w-12 rounded border px-1 py-0.5 text-center " +
                           (phaseOk
                             ? "border-slate-300"
                             : "border-amber-400 bg-amber-50")
@@ -126,7 +145,14 @@ export default function LinesPanel({ quoteId, lines, onChange, onAttachDhi }: Pr
                       )}
                     </label>
                   </div>
+
                   <div className="flex flex-col gap-1">
+                    <div className="flex items-center gap-1 text-[11px] text-slate-500">
+                      <Tag size={11} /> Justification
+                      {!justOk && (
+                        <span className="text-amber-700 ml-1">· required for auto-approval</span>
+                      )}
+                    </div>
                     <textarea
                       value={ln.justification}
                       onChange={(e) =>
@@ -135,17 +161,12 @@ export default function LinesPanel({ quoteId, lines, onChange, onAttachDhi }: Pr
                       placeholder="Why is this line included?"
                       rows={2}
                       className={
-                        "rounded border px-2 py-1 text-xs " +
+                        "rounded-lg border px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 " +
                         (justOk
                           ? "border-slate-300"
-                          : "border-amber-400 bg-amber-50")
+                          : "border-amber-300 bg-amber-50/40")
                       }
                     />
-                    {!justOk && (
-                      <span className="text-[11px] text-amber-700">
-                        Justification required for auto-approval.
-                      </span>
-                    )}
                   </div>
                 </li>
               );

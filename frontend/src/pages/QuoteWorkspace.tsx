@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
+  ArrowLeft,
+  Check,
+  Send,
+  Sparkles,
+  X,
+} from "lucide-react";
+import {
   addLine,
   approveQuote,
   getApprovalBrief,
@@ -9,7 +16,6 @@ import {
   submitQuote,
   type ApprovalBrief,
   type QuoteDetail,
-  type QuoteStatus,
 } from "../api/quotes";
 import { type CatalogueItem } from "../api/catalogue";
 import {
@@ -22,15 +28,8 @@ import CatalogueBrowser from "../components/quote/CatalogueBrowser";
 import LinesPanel from "../components/quote/LinesPanel";
 import IssuesPanel from "../components/quote/IssuesPanel";
 import ApproverBrief from "../components/quote/ApproverBrief";
-
-const STATUS_PILL: Record<QuoteStatus, string> = {
-  draft: "bg-slate-100 text-slate-700",
-  submitted: "bg-blue-50 text-blue-700",
-  pending_manager: "bg-amber-50 text-amber-700 border border-amber-200",
-  auto_approved: "bg-green-50 text-green-700 border border-green-200",
-  approved: "bg-emerald-50 text-emerald-700 border border-emerald-200",
-  rejected: "bg-red-50 text-red-700 border border-red-200",
-};
+import StatusBadge from "../components/StatusBadge";
+import { currencyFull } from "../lib/status";
 
 export default function QuoteWorkspace() {
   const { id } = useParams<{ id: string }>();
@@ -93,9 +92,7 @@ export default function QuoteWorkspace() {
       const v = await runValidation(quoteId);
       setValidations(v);
       const openCount = v.filter((x) => x.state === "open").length;
-      if (openCount === 0) {
-        setInfo("Validated — no open issues.");
-      }
+      if (openCount === 0) setInfo("Validated — no open issues.");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unknown error");
     } finally {
@@ -132,14 +129,12 @@ export default function QuoteWorkspace() {
     setError(null);
     setInfo(null);
     try {
-      await runValidation(quoteId); // refresh validations so routing uses latest
+      await runValidation(quoteId);
       const updated = await submitQuote(quoteId, comment.trim());
       await refresh();
-      if (updated.status === "auto_approved") {
-        setInfo("Auto-approved.");
-      } else if (updated.status === "pending_manager") {
+      if (updated.status === "auto_approved") setInfo("Auto-approved.");
+      else if (updated.status === "pending_manager")
         setInfo("Routed to manager queue: " + updated.routing_reasons.join("; "));
-      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unknown error");
     }
@@ -191,123 +186,151 @@ export default function QuoteWorkspace() {
       quote.status === "rejected");
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col">
-      <header className="border-b border-slate-200 bg-white px-6 py-3 flex items-center justify-between flex-wrap gap-3">
-        <div className="flex items-center gap-3 flex-wrap">
-          <Link to="/" className="text-sm text-slate-500 hover:text-slate-800">
-            ← Quotes
-          </Link>
-          <div className="text-sm font-semibold">
-            {quote?.number ?? "…"} · {quote?.customer ?? "…"}
-          </div>
-          {quote && (
-            <span className={"text-xs rounded-full px-2 py-0.5 " + STATUS_PILL[quote.status]}>
-              {quote.status}
-            </span>
-          )}
-        </div>
-        <div className="flex items-center gap-3">
-          <div className="text-sm font-medium">
-            Subtotal: ${(quote?.subtotal ?? 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}
-          </div>
-          {canSubmit && (
-            <button
-              onClick={onSubmit}
-              className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white"
+    <div className="min-h-screen flex flex-col">
+      <header className="sticky top-0 z-20 backdrop-blur bg-white/85 border-b border-slate-200">
+        <div className="mx-auto max-w-7xl px-6 py-3 flex items-center justify-between flex-wrap gap-3">
+          <div className="flex items-center gap-3 flex-wrap min-w-0">
+            <Link
+              to="/"
+              className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800"
             >
-              Submit for approval
-            </button>
-          )}
-          {isPending && (
-            <>
+              <ArrowLeft size={14} /> Quotes
+            </Link>
+            <div className="h-5 w-px bg-slate-300" />
+            <div className="flex items-center gap-2 min-w-0">
+              <Sparkles size={16} className="text-blue-600 shrink-0" />
+              <span className="font-mono text-xs px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">
+                {quote?.number ?? "…"}
+              </span>
+              <span className="text-sm font-semibold truncate">{quote?.customer ?? "…"}</span>
+              {quote && <StatusBadge status={quote.status} size="md" />}
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="text-sm">
+              <span className="text-slate-500">Subtotal</span>{" "}
+              <span className="font-semibold text-slate-900">
+                {currencyFull(quote?.subtotal ?? 0)}
+              </span>
+            </div>
+            {canSubmit && (
               <button
-                onClick={onApprove}
-                className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white"
+                onClick={onSubmit}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white shadow hover:bg-blue-700"
               >
-                Approve
+                <Send size={14} /> Submit for approval
               </button>
-              <button
-                onClick={onReject}
-                className="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium text-white"
-              >
-                Reject
-              </button>
-            </>
-          )}
+            )}
+            {isPending && (
+              <>
+                <button
+                  onClick={onApprove}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white shadow hover:bg-emerald-700"
+                >
+                  <Check size={14} /> Approve
+                </button>
+                <button
+                  onClick={onReject}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium text-white shadow hover:bg-red-700"
+                >
+                  <X size={14} /> Reject
+                </button>
+              </>
+            )}
+          </div>
         </div>
       </header>
 
       {isPending && <ApproverBrief brief={brief} loading={briefLoading} />}
 
       {quote && (quote.submit_comment || quote.routing_reasons.length > 0 || quote.decision_comment) && (
-        <div className="bg-white border-b border-slate-200 px-6 py-3 text-xs text-slate-600 flex flex-col gap-1">
-          {quote.submit_comment && (
-            <div>
-              <span className="font-medium text-slate-700">Submit comment:</span> {quote.submit_comment}
-            </div>
-          )}
-          {quote.routing_reasons.length > 0 && (
-            <div className="text-amber-700">
-              <span className="font-medium">Routing reasons:</span> {quote.routing_reasons.join("; ")}
-            </div>
-          )}
-          {quote.decision_comment && (
-            <div>
-              <span className="font-medium text-slate-700">
-                {quote.status === "rejected" ? "Rejection" : "Approval"} note
-                {quote.decided_by && ` (by ${quote.decided_by})`}:
-              </span>{" "}
-              {quote.decision_comment}
-            </div>
-          )}
+        <div className="bg-white border-b border-slate-200">
+          <div className="mx-auto max-w-7xl px-6 py-3 text-xs text-slate-600 flex flex-col gap-1">
+            {quote.submit_comment && (
+              <div>
+                <span className="font-medium text-slate-700">Submit comment:</span> {quote.submit_comment}
+              </div>
+            )}
+            {quote.routing_reasons.length > 0 && !isPending && (
+              <div className="text-amber-700">
+                <span className="font-medium">Routing reasons:</span> {quote.routing_reasons.join("; ")}
+              </div>
+            )}
+            {quote.decision_comment && (
+              <div>
+                <span className="font-medium text-slate-700">
+                  {quote.status === "rejected" ? "Rejection" : "Approval"} note
+                  {quote.decided_by && ` (by ${quote.decided_by})`}:
+                </span>{" "}
+                {quote.decision_comment}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
-      <main className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[320px_1fr_360px] gap-4 p-4">
-        <aside className="min-h-[60vh]">
-          <CatalogueBrowser onAdd={onAdd} />
-        </aside>
-        <section className="min-h-[60vh]">
-          {quote && (
-            <LinesPanel
-              quoteId={quoteId}
-              lines={quote.lines}
+      <main className="flex-1 min-h-0">
+        <div className="mx-auto max-w-7xl p-4 grid grid-cols-1 lg:grid-cols-[340px_1fr_380px] gap-4 min-h-[70vh]">
+          <aside className="min-h-[60vh]">
+            <CatalogueBrowser onAdd={onAdd} />
+          </aside>
+          <section className="min-h-[60vh]">
+            {quote && (
+              <LinesPanel
+                quoteId={quoteId}
+                lines={quote.lines}
+                onChange={refresh}
+                onAttachDhi={onAttachDhi}
+              />
+            )}
+          </section>
+          <aside className="min-h-[60vh]">
+            <IssuesPanel
+              validations={validations}
+              lineLabel={lineLabel}
               onChange={refresh}
-              onAttachDhi={onAttachDhi}
+              onRunValidate={onValidate}
+              validating={validating}
             />
-          )}
-        </section>
-        <aside className="min-h-[60vh]">
-          <IssuesPanel
-            validations={validations}
-            lineLabel={lineLabel}
-            onChange={refresh}
-            onRunValidate={onValidate}
-            validating={validating}
-          />
-        </aside>
+          </aside>
+        </div>
       </main>
 
       {error && (
-        <div className="fixed top-20 right-6 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700 z-30 shadow max-w-sm">
-          <div className="flex items-start gap-2">
-            <span className="flex-1">{error}</span>
-            <button onClick={() => setError(null)} className="text-red-400 hover:text-red-700">
-              ×
-            </button>
-          </div>
-        </div>
+        <Toast tone="red" onClose={() => setError(null)}>
+          {error}
+        </Toast>
       )}
       {info && !error && (
-        <div className="fixed top-20 right-6 rounded-lg bg-blue-50 border border-blue-200 px-3 py-2 text-sm text-blue-700 z-30 shadow max-w-sm">
-          <div className="flex items-start gap-2">
-            <span className="flex-1">{info}</span>
-            <button onClick={() => setInfo(null)} className="text-blue-400 hover:text-blue-700">
-              ×
-            </button>
-          </div>
-        </div>
+        <Toast tone="blue" onClose={() => setInfo(null)}>
+          {info}
+        </Toast>
       )}
+    </div>
+  );
+}
+
+function Toast({
+  children,
+  tone,
+  onClose,
+}: {
+  children: React.ReactNode;
+  tone: "red" | "blue";
+  onClose: () => void;
+}) {
+  const cls =
+    tone === "red"
+      ? "bg-red-50 border-red-200 text-red-700"
+      : "bg-blue-50 border-blue-200 text-blue-700";
+  return (
+    <div className={`fixed top-20 right-6 z-30 rounded-xl border px-3 py-2 text-sm shadow-lg max-w-sm ${cls}`}>
+      <div className="flex items-start gap-2">
+        <span className="flex-1">{children}</span>
+        <button onClick={onClose} className="text-current/60 hover:text-current">
+          <X size={14} />
+        </button>
+      </div>
     </div>
   );
 }
