@@ -9,6 +9,11 @@ venv/
 .env
 .env.local
 
+# Local DB
+*.db
+*.sqlite
+*.sqlite3
+
 # Node
 node_modules/
 dist/
