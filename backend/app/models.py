@@ -104,3 +104,55 @@ class QuoteLine(Base):
     )
 
     quote: Mapped[Quote] = relationship(back_populates="lines")
+
+
+# ─── Validation domain ─────────────────────────────────────────────────────
+
+
+class PhasingRule(Base):
+    __tablename__ = "phasing_rules"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    family: Mapped[str] = mapped_column(String(128), index=True)
+    llm_hint: Mapped[str] = mapped_column(Text, default="")
+    severity: Mapped[str] = mapped_column(String(16), default="warn")  # warn|block
+
+
+class Asc606Rule(Base):
+    __tablename__ = "asc606_rules"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    asc606_class: Mapped[str] = mapped_column(String(64), index=True)
+    requires_companion_class: Mapped[str | None] = mapped_column(String(64))
+    max_qty_per_line: Mapped[int | None] = mapped_column(Integer)
+    min_phase: Mapped[int | None] = mapped_column(Integer)
+    severity: Mapped[str] = mapped_column(String(16), default="warn")
+    rationale: Mapped[str] = mapped_column(Text, default="")
+
+
+class DhiCode(Base):
+    __tablename__ = "dhi_codes"
+
+    code: Mapped[str] = mapped_column(String(32), primary_key=True)
+    plain_language: Mapped[str] = mapped_column(Text)
+    remediation: Mapped[str] = mapped_column(Text, default="")
+    severity: Mapped[str] = mapped_column(String(16), default="warn")
+
+
+class Validation(Base):
+    __tablename__ = "validations"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    quote_id: Mapped[int] = mapped_column(
+        ForeignKey("quotes.id", ondelete="CASCADE"), index=True
+    )
+    line_id: Mapped[int | None] = mapped_column(
+        ForeignKey("quote_lines.id", ondelete="CASCADE")
+    )
+    rule: Mapped[str] = mapped_column(String(64))
+    severity: Mapped[str] = mapped_column(String(16), default="warn")
+    message: Mapped[str] = mapped_column(Text)
+    raw_code: Mapped[str | None] = mapped_column(String(32))
+    state: Mapped[str] = mapped_column(String(16), default="open")  # open|resolved|accepted
+    detected_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime)

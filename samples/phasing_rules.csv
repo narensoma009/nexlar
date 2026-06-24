@@ -1,0 +1,4 @@
+family,llm_hint,severity
+Networking,Core hardware (routers and gateways) should land in phase 1; phase 2+ is reserved for capacity expansion at new sites,warn
+Software,Optimization and performance features are typically deferred to phase 2 after the baseline deployment is stable,warn
+Services,Training and health-check services should follow initial implementation in phase 2 (after go-live),warn

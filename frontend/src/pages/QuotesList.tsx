@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   listQuotes,
@@ -7,6 +7,20 @@ import {
   type QuoteSummary,
 } from "../api/quotes";
 import { uploadCatalogue } from "../api/catalogue";
+import {
+  uploadAsc606Rules,
+  uploadDhiCodes,
+  uploadPhasingRules,
+} from "../api/validations";
+
+type UploadKind = "catalogue" | "phasing" | "asc606" | "dhi";
+
+const UPLOADERS: Record<UploadKind, { label: string; fn: (f: File) => Promise<{ inserted: number; updated: number }> }> = {
+  catalogue: { label: "Catalogue", fn: uploadCatalogue },
+  phasing: { label: "Phasing rules", fn: uploadPhasingRules },
+  asc606: { label: "ASC-606 rules", fn: uploadAsc606Rules },
+  dhi: { label: "DHI codes", fn: uploadDhiCodes },
+};
 
 export default function QuotesList() {
   const [quotes, setQuotes] = useState<QuoteSummary[]>([]);
@@ -14,8 +28,7 @@ export default function QuotesList() {
   const [ae, setAe] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const catalogueInput = useRef<HTMLInputElement>(null);
-  const [catStatus, setCatStatus] = useState<string | null>(null);
+  const [uploadStatus, setUploadStatus] = useState<string | null>(null);
   const navigate = useNavigate();
 
   async function refresh() {
@@ -54,18 +67,35 @@ export default function QuotesList() {
     }
   }
 
-  async function onCatalogue(file: File) {
-    setCatStatus("uploading…");
+  async function onUpload(kind: UploadKind, file: File) {
+    const uploader = UPLOADERS[kind];
+    setUploadStatus(`${uploader.label}: uploading…`);
     setError(null);
     try {
-      const r = await uploadCatalogue(file);
-      setCatStatus(`inserted ${r.inserted}, updated ${r.updated}`);
+      const r = await uploader.fn(file);
+      setUploadStatus(`${uploader.label}: inserted ${r.inserted}, updated ${r.updated}`);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Unknown error");
-      setCatStatus(null);
-    } finally {
-      if (catalogueInput.current) catalogueInput.current.value = "";
+      setError(`${uploader.label}: ${e instanceof Error ? e.message : "Unknown error"}`);
+      setUploadStatus(null);
     }
+  }
+
+  function UploadButton({ kind }: { kind: UploadKind }) {
+    return (
+      <label className="text-xs cursor-pointer rounded-lg border border-slate-300 px-3 py-1.5 hover:bg-slate-100">
+        {UPLOADERS[kind].label}
+        <input
+          type="file"
+          accept=".csv,text/csv"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) onUpload(kind, f);
+            e.target.value = "";
+          }}
+        />
+      </label>
+    );
   }
 
   return (
@@ -75,25 +105,17 @@ export default function QuotesList() {
           <h1 className="text-xl font-semibold tracking-tight">Nexlara</h1>
           <p className="text-sm text-slate-500">Quote workspace</p>
         </div>
-        <label className="text-sm cursor-pointer rounded-lg border border-slate-300 px-3 py-1.5 hover:bg-slate-100">
-          Upload catalogue CSV
-          <input
-            ref={catalogueInput}
-            type="file"
-            accept=".csv,text/csv"
-            className="hidden"
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) onCatalogue(f);
-            }}
-          />
-        </label>
+        <div className="flex flex-wrap gap-2 items-center">
+          <span className="text-xs text-slate-400 mr-1">Upload CSV:</span>
+          <UploadButton kind="catalogue" />
+          <UploadButton kind="phasing" />
+          <UploadButton kind="asc606" />
+          <UploadButton kind="dhi" />
+        </div>
       </header>
 
       <main className="mx-auto w-full max-w-5xl px-4 py-6 flex flex-col gap-6">
-        {catStatus && (
-          <div className="text-xs text-slate-500">Catalogue: {catStatus}</div>
-        )}
+        {uploadStatus && <div className="text-xs text-slate-500">{uploadStatus}</div>}
 
         <section className="rounded-2xl bg-white border border-slate-200 p-4 flex flex-col gap-2">
           <div className="text-sm font-medium">New quote</div>

@@ -1,0 +1,5 @@
+asc606_class,requires_companion_class,max_qty_per_line,min_phase,severity,rationale
+license,service,,,block,License revenue cannot be recognized standalone — a related Implementation Service line is required so the performance obligation is identifiable.
+hardware,,50,,warn,Single-line hardware orders above 50 units must be split into separate lines to support per-unit revenue allocation.
+subscription,,,1,block,Subscription start date must be at or after phase 1 for ratable monthly recognition; phase 0 / pre-go-live is not allowed.
+service,,,,warn,Service revenue is recognized over the delivery period — verify the engagement window matches the deal schedule.

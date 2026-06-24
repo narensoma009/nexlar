@@ -1,0 +1,7 @@
+code,plain_language,remediation,severity
+E1042,Customer is on credit hold and the quote exceeds the open A/R threshold,Request a Finance review or downscale phase 1 commitment to fit the credit window,block
+E2103,Multi-year discount is missing on a subscription line,Apply the standard 3-yr discount (rate card row D-12) or split into single-year terms,warn
+E3007,Cross-product dependency unresolved (license without companion service),Add an Implementation Service line so the license has a performance obligation,block
+E4521,Phase-1 footprint exceeds the 12-month bookable window,Defer non-critical scope (training, health-check) to phase 2,warn
+E5101,Pricing override exceeds discount-approval limit for AE tier,Request RVP discount approval or restore list price,warn
+E6004,Customer region requires a security review for this product family,Open the security gate ticket before submit,block

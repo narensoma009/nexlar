@@ -5,9 +5,10 @@ type Props = {
   quoteId: number;
   lines: QuoteLine[];
   onChange: () => void;
+  onAttachDhi?: (lineId: number) => void;
 };
 
-export default function LinesPanel({ quoteId, lines, onChange }: Props) {
+export default function LinesPanel({ quoteId, lines, onChange, onAttachDhi }: Props) {
   const [busy, setBusy] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -64,13 +65,23 @@ export default function LinesPanel({ quoteId, lines, onChange }: Props) {
                     <div className="text-sm font-medium whitespace-nowrap">
                       ${ln.line_total.toFixed(2)}
                     </div>
-                    <button
-                      disabled={busy === ln.id}
-                      onClick={() => remove(ln.id)}
-                      className="text-xs text-red-600 hover:underline disabled:opacity-50"
-                    >
-                      remove
-                    </button>
+                    <div className="flex flex-col items-end gap-1 text-xs">
+                      {onAttachDhi && (
+                        <button
+                          onClick={() => onAttachDhi(ln.id)}
+                          className="text-slate-500 hover:underline"
+                        >
+                          + DHI code
+                        </button>
+                      )}
+                      <button
+                        disabled={busy === ln.id}
+                        onClick={() => remove(ln.id)}
+                        className="text-red-600 hover:underline disabled:opacity-50"
+                      >
+                        remove
+                      </button>
+                    </div>
                   </div>
                   <div className="flex flex-wrap items-center gap-2 text-xs">
                     <label className="flex items-center gap-1">

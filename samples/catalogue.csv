@@ -1,0 +1,13 @@
+sku_id,name,family,description,unit_price,allowed_phases,asc606_class
+SKU-NW-001,Edge Gateway 10G,Networking,10 Gbps edge router for branch sites,2500,"1,2",hardware
+SKU-NW-002,Edge Gateway 25G,Networking,25 Gbps edge router for mid-size sites,4200,"1,2",hardware
+SKU-NW-003,Core Router,Networking,Datacenter core routing fabric,8500,1,hardware
+SKU-NW-004,Wireless Controller,Networking,Centralized wireless management appliance,3100,"1,2",hardware
+SKU-SW-001,Network Analytics License,Software,Annual telemetry + analytics license,1200,"1,2,3",license
+SKU-SW-002,Security Module License,Software,Annual IDS/IPS + zero-trust module license,1800,"1,2",license
+SKU-SW-003,Performance Pack,Software,Optimization + QoS feature pack,750,"2,3",license
+SKU-SW-004,Identity Federation Add-on,Software,SAML/OIDC SSO add-on for the management plane,650,"1,2,3",license
+SKU-SV-001,Implementation Service,Services,Architecture + deployment service (one-time),3500,"1,2,3",service
+SKU-SV-002,24x7 Support Subscription,Services,Annual premium support subscription,2400,"1,2,3",subscription
+SKU-SV-003,Training Package,Services,4-day operator + admin training,1500,"1,2",service
+SKU-SV-004,Annual Health Check,Services,Quarterly architecture review service,800,"2,3",service

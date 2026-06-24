@@ -11,6 +11,7 @@ from .db import init_db
 from .documents import router as documents_router
 from .quotes import router as quotes_router
 from .routes import router as chat_router
+from .validations import router as validations_router
 
 
 @asynccontextmanager
@@ -34,6 +35,7 @@ app.include_router(chat_router, prefix="/api")
 app.include_router(documents_router, prefix="/api")
 app.include_router(catalogue_router, prefix="/api")
 app.include_router(quotes_router, prefix="/api")
+app.include_router(validations_router, prefix="/api")
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 if STATIC_DIR.is_dir():
