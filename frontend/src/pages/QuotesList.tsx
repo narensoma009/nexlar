@@ -122,29 +122,53 @@ export default function QuotesList() {
             </div>
             <div>
               <div className="text-base font-semibold tracking-tight">Nexlara</div>
-              <div className="text-[11px] text-slate-500">Quote workspace</div>
+              <div className="text-[11px] text-slate-500">
+                {isManager ? "Approval queue" : "Quote workspace"}
+              </div>
             </div>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            {(Object.keys(UPLOADERS) as UploadKind[]).map((k) => (
-              <label
-                key={k}
-                className="inline-flex items-center gap-1.5 text-xs cursor-pointer rounded-lg border border-slate-300 px-2.5 py-1.5 bg-white hover:bg-slate-50 shadow-sm"
-              >
-                <Upload size={13} />
-                {UPLOADERS[k].label}
-                <input
-                  type="file"
-                  accept=".csv,text/csv"
-                  className="hidden"
-                  onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    if (f) onUpload(k, f);
-                    e.target.value = "";
-                  }}
-                />
-              </label>
-            ))}
+            {isAE && (
+              <>
+                <span className="text-xs text-slate-400 mr-1">Upload CSV:</span>
+                {(Object.keys(UPLOADERS) as UploadKind[]).map((k) => (
+                  <label
+                    key={k}
+                    className="inline-flex items-center gap-1.5 text-xs cursor-pointer rounded-lg border border-slate-300 px-2.5 py-1.5 bg-white hover:bg-slate-50 shadow-sm"
+                  >
+                    <Upload size={13} />
+                    {UPLOADERS[k].label}
+                    <input
+                      type="file"
+                      accept=".csv,text/csv"
+                      className="hidden"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) onUpload(k, f);
+                        e.target.value = "";
+                      }}
+                    />
+                  </label>
+                ))}
+              </>
+            )}
+            {user && (
+              <div className="flex items-center gap-2 ml-2 pl-3 border-l border-slate-200">
+                <div className="text-right">
+                  <div className="text-xs font-medium text-slate-800">{user.name}</div>
+                  <div className="text-[10px] uppercase tracking-wider text-slate-500">
+                    {isManager ? "Manager" : "Account Executive"}
+                  </div>
+                </div>
+                <button
+                  onClick={logout}
+                  title="Sign out"
+                  className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                >
+                  <LogOut size={14} /> Sign out
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </header>
