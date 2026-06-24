@@ -1,10 +1,8 @@
 from datetime import datetime
 
-from pgvector.sqlalchemy import Vector
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from .config import settings
 from .db import Base
 
 
@@ -30,6 +28,6 @@ class Chunk(Base):
     )
     row_index: Mapped[int] = mapped_column(Integer)
     content: Mapped[str] = mapped_column(Text)
-    embedding: Mapped[list[float]] = mapped_column(Vector(settings.embedding_dim))
+    embedding: Mapped[list[float]] = mapped_column(JSON)
 
     document: Mapped[Document] = relationship(back_populates="chunks")

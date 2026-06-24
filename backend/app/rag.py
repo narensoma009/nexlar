@@ -1,5 +1,6 @@
 import csv
 import io
+import math
 from typing import Iterable
 
 from sqlalchemy import select
@@ -8,6 +9,13 @@ from sqlalchemy.orm import Session
 from .config import settings
 from .embeddings import embed_text, embed_texts
 from .models import Chunk, Document
+
+
+def _cosine(a: list[float], b: list[float]) -> float:
+    dot = sum(x * y for x, y in zip(a, b))
+    na = math.sqrt(sum(x * x for x in a))
+    nb = math.sqrt(sum(x * x for x in b))
+    return dot / (na * nb) if na and nb else 0.0
 
 
 def _rows_to_chunks(filename: str, raw_bytes: bytes) -> list[tuple[int, str]]:
@@ -58,5 +66,7 @@ def ingest_csv(db: Session, filename: str, raw_bytes: bytes) -> Document:
 def retrieve(db: Session, query: str, top_k: int | None = None) -> list[Chunk]:
     k = top_k or settings.rag_top_k
     qvec = embed_text(query)
-    stmt = select(Chunk).order_by(Chunk.embedding.cosine_distance(qvec)).limit(k)
-    return list(db.execute(stmt).scalars().all())
+    all_chunks = list(db.execute(select(Chunk)).scalars().all())
+    scored = [(c, _cosine(qvec, c.embedding)) for c in all_chunks]
+    scored.sort(key=lambda x: x[1], reverse=True)
+    return [c for c, _ in scored[:k]]
