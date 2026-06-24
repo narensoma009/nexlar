@@ -15,9 +15,9 @@ These run inside **Azure Cloud Shell** (Bash), which has `az`, `git`, `node`, `n
 Open Cloud Shell (portal → `>_` icon → Bash). Then:
 
 ```bash
-curl -O https://raw.githubusercontent.com/odl-user-2285550_clabs/pod6-Nexlara/main/scripts/vars.sh
-curl -O https://raw.githubusercontent.com/odl-user-2285550_clabs/pod6-Nexlara/main/scripts/setup.sh
-curl -O https://raw.githubusercontent.com/odl-user-2285550_clabs/pod6-Nexlara/main/scripts/deploy.sh
+curl -O https://raw.githubusercontent.com/narensoma009/nexlar/main/scripts/vars.sh
+curl -O https://raw.githubusercontent.com/narensoma009/nexlar/main/scripts/setup.sh
+curl -O https://raw.githubusercontent.com/narensoma009/nexlar/main/scripts/deploy.sh
 chmod +x setup.sh deploy.sh
 
 # (Optional) edit vars.sh if you changed the web app name or RG
@@ -33,7 +33,7 @@ mkdir -p ~/pod6-scripts && mv vars.sh setup.sh deploy.sh ~/pod6-scripts/
 After you push to GitHub:
 
 ```bash
-~/pod6-Nexlara/scripts/deploy.sh
+~/nexlar/scripts/deploy.sh
 ```
 
 (Or `~/pod6-scripts/deploy.sh` if you bootstrapped via curl above — same behavior, it just sources the same vars.)
