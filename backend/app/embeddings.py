@@ -1,11 +1,18 @@
-from openai import AzureOpenAI
+from openai import OpenAI
 
 from .config import settings
 
-_client = AzureOpenAI(
-    azure_endpoint=settings.azure_openai_endpoint,
+
+def _foundry_base_url() -> str:
+    endpoint = settings.azure_openai_endpoint.rstrip("/")
+    if not endpoint.endswith("/openai/v1"):
+        endpoint = f"{endpoint}/openai/v1"
+    return endpoint
+
+
+_client = OpenAI(
     api_key=settings.azure_openai_api_key,
-    api_version=settings.azure_openai_api_version,
+    base_url=_foundry_base_url(),
 )
 
 
