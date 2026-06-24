@@ -76,6 +76,9 @@ class QuoteOut(BaseModel):
     decided_by: str = ""
     decided_at: datetime | None = None
     decision_comment: str = ""
+    priority_score: int = 0           # 0..100, higher = more urgent
+    priority_level: str = "low"       # "low" | "medium" | "high"
+    wait_hours: float = 0.0           # hours since submission
 
     model_config = {"from_attributes": True}
 
@@ -133,6 +136,38 @@ def _line_view(line: QuoteLine, sku: Catalogue | None) -> QuoteLineOut:
     )
 
 
+def _compute_priority(subtotal: float, wait_hours: float) -> tuple[int, str]:
+    """Composite priority: deal size + waiting time + risk-of-loss signals.
+
+    - size_score      0..40   ($1M = 40 pts, scales linearly)
+    - wait_score      0..40   (72h = 40 pts)
+    - threshold_bonus 0 or 15 (subtotal breaches the auto-approve cap)
+    - risk_boost      0..20   (long wait × big deal => abandonment risk)
+    Total capped at 100.
+    """
+    from .config import settings
+
+    size_score = min(subtotal / 25_000.0, 40.0)
+    wait_score = min(wait_hours / 1.8, 40.0)
+    threshold_bonus = 15.0 if subtotal >= settings.auto_approve_max_value else 0.0
+    risk_boost = 0.0
+    if wait_hours > 48 and subtotal > 200_000:
+        risk_boost = 20.0
+    elif wait_hours > 72:
+        risk_boost = 15.0
+    elif wait_hours > 24:
+        risk_boost = 8.0
+    raw = size_score + wait_score + threshold_bonus + risk_boost
+    score = int(round(min(raw, 100.0)))
+    if score >= 65:
+        level = "high"
+    elif score >= 30:
+        level = "medium"
+    else:
+        level = "low"
+    return score, level
+
+
 def _quote_summary(quote: Quote, db: Session) -> QuoteOut:
     sku_ids = [ln.sku_id for ln in quote.lines]
     skus = {
@@ -147,6 +182,13 @@ def _quote_summary(quote: Quote, db: Session) -> QuoteOut:
         * ln.qty
         for ln in quote.lines
     )
+    subtotal_f = float(subtotal)
+    # Waiting time only meaningful while a manager decision is pending
+    wait_hours = 0.0
+    if quote.status == "pending_manager" and quote.submitted_at:
+        delta = datetime.utcnow() - quote.submitted_at
+        wait_hours = max(delta.total_seconds() / 3600.0, 0.0)
+    p_score, p_level = _compute_priority(subtotal_f, wait_hours)
     return QuoteOut(
         id=quote.id,
         number=quote.number,
@@ -156,13 +198,16 @@ def _quote_summary(quote: Quote, db: Session) -> QuoteOut:
         created_at=quote.created_at,
         updated_at=quote.updated_at,
         line_count=len(quote.lines),
-        subtotal=float(subtotal),
+        subtotal=subtotal_f,
         submit_comment=quote.submit_comment or "",
         submitted_at=quote.submitted_at,
         routing_reasons=list(quote.routing_reasons or []),
         decided_by=quote.decided_by or "",
         decided_at=quote.decided_at,
         decision_comment=quote.decision_comment or "",
+        priority_score=p_score,
+        priority_level=p_level,
+        wait_hours=round(wait_hours, 1),
     )
 
 
@@ -211,7 +256,18 @@ def list_quotes(
 ) -> list[QuoteOut]:
     stmt = _visible_to(user, select(Quote)).order_by(Quote.id.desc())
     quotes = list(db.execute(stmt).scalars().all())
-    return [_quote_summary(q, db) for q in quotes]
+    summaries = [_quote_summary(q, db) for q in quotes]
+    if user.role == "manager":
+        # Bubble high-priority pending quotes to the top; keep relative order for the rest
+        summaries.sort(
+            key=lambda s: (
+                0 if s.status == "pending_manager" else 1,
+                -s.priority_score,
+                -(s.wait_hours or 0),
+                -s.subtotal,
+            )
+        )
+    return summaries
 
 
 @router.post("/quotes", response_model=QuoteDetailOut, status_code=201)

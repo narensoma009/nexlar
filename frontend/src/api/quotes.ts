@@ -8,6 +8,8 @@ export type QuoteStatus =
   | "approved"
   | "rejected";
 
+export type PriorityLevel = "low" | "medium" | "high";
+
 export type QuoteSummary = {
   id: number;
   number: string;
@@ -24,6 +26,9 @@ export type QuoteSummary = {
   decided_by: string;
   decided_at: string | null;
   decision_comment: string;
+  priority_score: number;
+  priority_level: PriorityLevel;
+  wait_hours: number;
 };
 
 export type QuoteLine = {

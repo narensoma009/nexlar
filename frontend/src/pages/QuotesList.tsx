@@ -5,10 +5,12 @@ import {
   ClipboardList,
   Clock,
   FileText,
+  Flame,
   LogOut,
   Plus,
   ShieldCheck,
   Sparkles,
+  Timer,
   Trash2,
   Upload,
 } from "lucide-react";
@@ -27,7 +29,7 @@ import {
 import { useAuth } from "../auth/AuthContext";
 import StatusBadge from "../components/StatusBadge";
 import StatCard from "../components/StatCard";
-import { currencyFull } from "../lib/status";
+import { currencyFull, PRIORITY_META, waitLabel } from "../lib/status";
 
 type UploadKind = "catalogue" | "phasing" | "asc606" | "dhi";
 
@@ -262,13 +264,19 @@ export default function QuotesList() {
           <>
             <Section
               title="Awaiting your decision"
-              subtitle="Open each quote to see the AI approver brief with risk score."
+              subtitle="Sorted by priority: deal size, waiting time, risk of losing the sale."
               tone="amber"
               count={pending.length}
               empty="Inbox zero — no quotes waiting on you."
             >
               {pending.map((q) => (
-                <QuoteRow key={q.id} q={q} canDelete={false} onDelete={() => onDelete(q.id)} />
+                <QuoteRow
+                  key={q.id}
+                  q={q}
+                  canDelete={false}
+                  showPriority
+                  onDelete={() => onDelete(q.id)}
+                />
               ))}
             </Section>
 
@@ -399,17 +407,41 @@ function QuoteRow({
   q,
   onDelete,
   canDelete = true,
+  showPriority = false,
 }: {
   q: QuoteSummary;
   onDelete: () => void;
   canDelete?: boolean;
+  showPriority?: boolean;
 }) {
+  const pri = PRIORITY_META[q.priority_level];
   return (
     <li>
       <Link
         to={`/quotes/${q.id}`}
-        className="group flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5 hover:border-blue-300 hover:bg-blue-50/40 transition"
+        className={
+          "group flex items-center gap-3 rounded-xl border bg-white px-3 py-2.5 hover:bg-blue-50/40 transition " +
+          (showPriority && q.priority_level === "high"
+            ? "border-red-300"
+            : showPriority && q.priority_level === "medium"
+            ? "border-amber-300"
+            : "border-slate-200")
+        }
       >
+        {showPriority && (
+          <div
+            className={
+              "flex flex-col items-center justify-center rounded-xl shadow-md w-14 h-14 shrink-0 " +
+              pri.badge
+            }
+            title={`Priority ${q.priority_score}/100 (${pri.label})`}
+          >
+            <span className="text-lg font-bold leading-none">{q.priority_score}</span>
+            <span className="text-[9px] uppercase tracking-wider mt-0.5">
+              {pri.label}
+            </span>
+          </div>
+        )}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-mono text-xs px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">
@@ -417,10 +449,20 @@ function QuoteRow({
             </span>
             <span className="text-sm font-medium text-slate-900 truncate">{q.customer}</span>
             <StatusBadge status={q.status} />
+            {showPriority && q.priority_level === "high" && (
+              <span className={"inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold " + pri.pill}>
+                <Flame size={10} /> URGENT
+              </span>
+            )}
           </div>
           <div className="text-xs text-slate-500 mt-1 flex flex-wrap gap-x-3">
+            <span className="font-semibold text-slate-700">{currencyFull(q.subtotal)}</span>
             <span>{q.line_count} line{q.line_count === 1 ? "" : "s"}</span>
-            <span>{currencyFull(q.subtotal)}</span>
+            {showPriority && q.status === "pending_manager" && (
+              <span className="inline-flex items-center gap-1 text-slate-600">
+                <Timer size={11} /> waiting {waitLabel(q.wait_hours)}
+              </span>
+            )}
             {q.ae && <span>AE {q.ae}</span>}
             {q.decided_by && <span>decided by {q.decided_by}</span>}
           </div>
@@ -441,7 +483,7 @@ function QuoteRow({
               e.preventDefault();
               onDelete();
             }}
-            className="opacity-0 group-hover:opacity-100 transition text-slate-400 hover:text-red-600 p-1"
+            className="opacity-0 group-hover:opacity-100 transition text-slate-400 hover:text-red-600 p-1 shrink-0"
             title="Delete"
           >
             <Trash2 size={14} />

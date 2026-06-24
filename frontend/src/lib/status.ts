@@ -74,3 +74,35 @@ export function currency(n: number): string {
 export function currencyFull(n: number): string {
   return `$${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
 }
+
+export function waitLabel(hours: number): string {
+  if (!hours || hours < 1) return "just now";
+  if (hours < 24) return `${Math.round(hours)}h`;
+  const days = Math.floor(hours / 24);
+  const rem = Math.round(hours - days * 24);
+  return rem === 0 ? `${days}d` : `${days}d ${rem}h`;
+}
+
+export const PRIORITY_META: Record<
+  "low" | "medium" | "high",
+  { label: string; pill: string; dot: string; badge: string }
+> = {
+  high: {
+    label: "High",
+    pill: "bg-red-100 text-red-800 border border-red-200",
+    dot: "bg-red-500",
+    badge: "bg-gradient-to-br from-red-500 to-rose-600 text-white shadow-red-200",
+  },
+  medium: {
+    label: "Medium",
+    pill: "bg-amber-100 text-amber-800 border border-amber-200",
+    dot: "bg-amber-500",
+    badge: "bg-gradient-to-br from-amber-400 to-orange-500 text-white shadow-amber-200",
+  },
+  low: {
+    label: "Low",
+    pill: "bg-slate-100 text-slate-700 border border-slate-200",
+    dot: "bg-slate-400",
+    badge: "bg-gradient-to-br from-slate-400 to-slate-500 text-white shadow-slate-200",
+  },
+};
