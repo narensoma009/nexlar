@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from openai import AzureOpenAI, OpenAIError
+from openai import OpenAI, OpenAIError
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -9,10 +9,17 @@ from .rag import retrieve
 
 router = APIRouter()
 
-client = AzureOpenAI(
-    azure_endpoint=settings.azure_openai_endpoint,
+
+def _foundry_base_url() -> str:
+    endpoint = settings.azure_openai_endpoint.rstrip("/")
+    if not endpoint.endswith("/openai/v1"):
+        endpoint = f"{endpoint}/openai/v1"
+    return endpoint
+
+
+client = OpenAI(
     api_key=settings.azure_openai_api_key,
-    api_version=settings.azure_openai_api_version,
+    base_url=_foundry_base_url(),
 )
 
 
