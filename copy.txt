@@ -2,3 +2,8 @@ az webapp config show \
   --resource-group rde-pod6-rg \
   --name pod6-nexlara-def3ffedhvb2drak \
   --query "{startup:appCommandLine, linuxFx:linuxFxVersion}" -o table
+
+
+ANTENV=$(find /tmp -maxdepth 2 -type d -name antenv 2>/dev/null | head -1)
+echo "antenv: $ANTENV"
+ls $ANTENV/lib/python3.11/site-packages/ | grep -iE 'fastapi|uvicorn|gunicorn|pydantic|sqlalchemy' || echo "NONE FOUND"
