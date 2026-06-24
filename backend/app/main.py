@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -5,11 +6,21 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from .catalogue import router as catalogue_router
 from .db import init_db
 from .documents import router as documents_router
+from .quotes import router as quotes_router
 from .routes import router as chat_router
 
-app = FastAPI(title="Nexlara")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_db()
+    yield
+
+
+app = FastAPI(title="Nexlara", lifespan=lifespan)
+init_db()  # also run at import time so TestClient and reload always have tables
 
 app.add_middleware(
     CORSMiddleware,
@@ -19,14 +30,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-@app.on_event("startup")
-def _startup() -> None:
-    init_db()
-
-
 app.include_router(chat_router, prefix="/api")
 app.include_router(documents_router, prefix="/api")
+app.include_router(catalogue_router, prefix="/api")
+app.include_router(quotes_router, prefix="/api")
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 if STATIC_DIR.is_dir():
