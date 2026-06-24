@@ -97,3 +97,20 @@ export const rejectQuote = (id: number, decided_by: string, decision_comment: st
     method: "POST",
     json: { decided_by, decision_comment },
   });
+
+export type ApprovalFactor = {
+  label: string;
+  weight: number;
+  kind: "risk" | "strength";
+};
+
+export type ApprovalBrief = {
+  risk_score: number;
+  risk_level: "low" | "medium" | "high";
+  recommendation: "approve" | "review_then_approve" | "consider_rejecting";
+  rationale: string;
+  factors: ApprovalFactor[];
+};
+
+export const getApprovalBrief = (id: number) =>
+  api<ApprovalBrief>(`/api/quotes/${id}/approval-brief`);

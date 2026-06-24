@@ -206,8 +206,22 @@ export default function QuotesList() {
         </section>
 
         <Section
+          title={`AE action required: rejected (${rejected.length})`}
+          tone="red"
+          subtitle="Open each quote to address the manager's notes, then re-submit."
+          empty="No rejected quotes — nothing to act on."
+        >
+          <ul className="flex flex-col divide-y divide-slate-100">
+            {rejected.map((q) => (
+              <QuoteRow key={q.id} q={q} />
+            ))}
+          </ul>
+        </Section>
+
+        <Section
           title={`Pending manager approval (${pending.length})`}
           tone="amber"
+          subtitle="Each quote includes an approver brief with a risk score and recommendation."
           empty="Nothing waiting on a manager."
         >
           <ul className="flex flex-col divide-y divide-slate-100">
@@ -249,16 +263,6 @@ export default function QuotesList() {
           </Section>
         )}
 
-        {rejected.length > 0 && (
-          <Section title={`Rejected (${rejected.length})`} tone="red">
-            <ul className="flex flex-col divide-y divide-slate-100">
-              {rejected.map((q) => (
-                <QuoteRow key={q.id} q={q} />
-              ))}
-            </ul>
-          </Section>
-        )}
-
         {error && (
           <div className="rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
             {error}
@@ -281,17 +285,23 @@ function Section({
   title,
   tone,
   empty,
+  subtitle,
   children,
 }: {
   title: string;
   tone: keyof typeof TONE;
   empty?: string;
+  subtitle?: string;
   children: React.ReactNode;
 }) {
+  const childCount = (children as any)?.props?.children?.length ?? 0;
   return (
     <section className={"rounded-2xl bg-white p-4 border " + TONE[tone]}>
-      <div className="text-sm font-medium mb-2">{title}</div>
-      {empty && (children as any)?.props?.children?.length === 0 ? (
+      <div className="flex flex-col mb-2">
+        <div className="text-sm font-medium">{title}</div>
+        {subtitle && <div className="text-xs text-slate-500">{subtitle}</div>}
+      </div>
+      {empty && childCount === 0 ? (
         <div className="text-sm text-slate-400">{empty}</div>
       ) : (
         children

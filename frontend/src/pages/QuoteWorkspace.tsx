@@ -3,9 +3,11 @@ import { Link, useParams } from "react-router-dom";
 import {
   addLine,
   approveQuote,
+  getApprovalBrief,
   getQuote,
   rejectQuote,
   submitQuote,
+  type ApprovalBrief,
   type QuoteDetail,
   type QuoteStatus,
 } from "../api/quotes";
@@ -19,6 +21,7 @@ import {
 import CatalogueBrowser from "../components/quote/CatalogueBrowser";
 import LinesPanel from "../components/quote/LinesPanel";
 import IssuesPanel from "../components/quote/IssuesPanel";
+import ApproverBrief from "../components/quote/ApproverBrief";
 
 const STATUS_PILL: Record<QuoteStatus, string> = {
   draft: "bg-slate-100 text-slate-700",
@@ -37,6 +40,8 @@ export default function QuoteWorkspace() {
   const [validating, setValidating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  const [brief, setBrief] = useState<ApprovalBrief | null>(null);
+  const [briefLoading, setBriefLoading] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -54,6 +59,18 @@ export default function QuoteWorkspace() {
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    if (quote?.status !== "pending_manager") {
+      setBrief(null);
+      return;
+    }
+    setBriefLoading(true);
+    getApprovalBrief(quoteId)
+      .then(setBrief)
+      .catch((e) => setError(e instanceof Error ? e.message : "Brief failed"))
+      .finally(() => setBriefLoading(false));
+  }, [quote?.status, quote?.updated_at, quoteId]);
 
   async function onAdd(item: CatalogueItem) {
     try {
@@ -220,6 +237,8 @@ export default function QuoteWorkspace() {
         </div>
       </header>
 
+      {isPending && <ApproverBrief brief={brief} loading={briefLoading} />}
+
       {quote && (quote.submit_comment || quote.routing_reasons.length > 0 || quote.decision_comment) && (
         <div className="bg-white border-b border-slate-200 px-6 py-3 text-xs text-slate-600 flex flex-col gap-1">
           {quote.submit_comment && (
@@ -270,13 +289,23 @@ export default function QuoteWorkspace() {
       </main>
 
       {error && (
-        <div className="fixed bottom-24 left-6 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700 z-30">
-          {error}
+        <div className="fixed top-20 right-6 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700 z-30 shadow max-w-sm">
+          <div className="flex items-start gap-2">
+            <span className="flex-1">{error}</span>
+            <button onClick={() => setError(null)} className="text-red-400 hover:text-red-700">
+              ×
+            </button>
+          </div>
         </div>
       )}
       {info && !error && (
-        <div className="fixed bottom-24 left-6 rounded-lg bg-blue-50 border border-blue-200 px-3 py-2 text-sm text-blue-700 z-30">
-          {info}
+        <div className="fixed top-20 right-6 rounded-lg bg-blue-50 border border-blue-200 px-3 py-2 text-sm text-blue-700 z-30 shadow max-w-sm">
+          <div className="flex items-start gap-2">
+            <span className="flex-1">{info}</span>
+            <button onClick={() => setInfo(null)} className="text-blue-400 hover:text-blue-700">
+              ×
+            </button>
+          </div>
         </div>
       )}
     </div>

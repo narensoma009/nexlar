@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from .config import settings
 from .db import get_session
 from .models import Catalogue, Quote, QuoteLine, Validation
+from .quote_llm import approver_brief as llm_approver_brief
 
 router = APIRouter()
 
@@ -89,6 +90,20 @@ class SubmitIn(BaseModel):
 class DecisionIn(BaseModel):
     decided_by: str = ""
     decision_comment: str = ""
+
+
+class ApprovalFactor(BaseModel):
+    label: str
+    weight: int
+    kind: str  # "risk" | "strength"
+
+
+class ApprovalBriefOut(BaseModel):
+    risk_score: int
+    risk_level: str  # "low" | "medium" | "high"
+    recommendation: str  # "approve" | "review_then_approve" | "consider_rejecting"
+    rationale: str
+    factors: list[ApprovalFactor]
 
 
 # ─── Helpers ───────────────────────────────────────────────────────────────
@@ -372,6 +387,111 @@ def approve_quote(
     db.commit()
     db.refresh(quote)
     return _quote_detail(quote, db)
+
+
+def _build_brief(quote: Quote, db: Session) -> ApprovalBriefOut:
+    summary = _quote_summary(quote, db)
+    subtotal = summary.subtotal
+    validations = list(
+        db.execute(
+            select(Validation).where(
+                Validation.quote_id == quote.id, Validation.state == "open"
+            )
+        ).scalars()
+    )
+    blocks = [v for v in validations if v.severity == "block"]
+    warns = [v for v in validations if v.severity == "warn"]
+    missing_just = [ln for ln in quote.lines if not (ln.justification or "").strip()]
+
+    score = 0
+    factors: list[ApprovalFactor] = []
+
+    threshold = settings.auto_approve_max_value
+    if subtotal >= 1_000_000:
+        score += 50
+        factors.append(
+            ApprovalFactor(label=f"Subtotal ${subtotal:,.0f} exceeds $1M", weight=50, kind="risk")
+        )
+    elif subtotal >= threshold:
+        score += 30
+        factors.append(
+            ApprovalFactor(
+                label=f"Subtotal ${subtotal:,.0f} exceeds threshold ${threshold:,.0f}",
+                weight=30,
+                kind="risk",
+            )
+        )
+    elif subtotal >= 200_000:
+        score += 15
+        factors.append(
+            ApprovalFactor(label=f"Mid-size subtotal ${subtotal:,.0f}", weight=15, kind="risk")
+        )
+    else:
+        factors.append(
+            ApprovalFactor(label=f"Subtotal within typical bounds (${subtotal:,.0f})", weight=0, kind="strength")
+        )
+
+    if blocks:
+        d = min(15 * len(blocks), 30)
+        score += d
+        factors.append(ApprovalFactor(label=f"{len(blocks)} open blocker(s)", weight=d, kind="risk"))
+    else:
+        factors.append(ApprovalFactor(label="No open blockers", weight=0, kind="strength"))
+
+    if warns:
+        d = min(5 * len(warns), 20)
+        score += d
+        factors.append(ApprovalFactor(label=f"{len(warns)} open warning(s)", weight=d, kind="risk"))
+
+    if missing_just:
+        score += 10
+        factors.append(
+            ApprovalFactor(
+                label=f"{len(missing_just)} line(s) without justification",
+                weight=10,
+                kind="risk",
+            )
+        )
+    else:
+        factors.append(ApprovalFactor(label="All lines justified", weight=0, kind="strength"))
+
+    score = min(score, 100)
+    if score < 25:
+        level, recommendation = "low", "approve"
+    elif score < 50:
+        level, recommendation = "medium", "review_then_approve"
+    else:
+        level, recommendation = "high", "consider_rejecting"
+
+    brief_input = (
+        f"Quote {quote.number} for {quote.customer}, subtotal ${subtotal:,.0f}.\n"
+        f"Risk score {score}/100 ({level}).\n"
+        f"Open blockers: {len(blocks)}; open warnings: {len(warns)}; "
+        f"missing justifications: {len(missing_just)}.\n"
+        f"Routing reasons: {'; '.join(quote.routing_reasons or []) or '(none)'}\n"
+        f"AE submit comment: {quote.submit_comment or '(none)'}\n"
+        f"Initial recommendation tier: {recommendation}"
+    )
+    try:
+        rationale = llm_approver_brief(brief_input)
+    except Exception as e:  # noqa: BLE001
+        rationale = f"(unable to generate rationale: {e})"
+
+    return ApprovalBriefOut(
+        risk_score=score,
+        risk_level=level,
+        recommendation=recommendation,
+        rationale=rationale,
+        factors=factors,
+    )
+
+
+@router.get("/quotes/{quote_id}/approval-brief", response_model=ApprovalBriefOut)
+def approval_brief(quote_id: int, db: Session = Depends(get_session)) -> ApprovalBriefOut:
+    quote = db.get(Quote, quote_id)
+    if not quote:
+        raise HTTPException(status_code=404, detail="Quote not found")
+    return _build_brief(quote, db)
 
 
 @router.post("/quotes/{quote_id}/reject", response_model=QuoteDetailOut)

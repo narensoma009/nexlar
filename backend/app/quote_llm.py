@@ -57,3 +57,14 @@ def explain_asc606(rationale: str, line_summary: str) -> str:
     )
     user = f"Rule rationale:\n{rationale}\n\nLine:\n{line_summary}"
     return _complete(system, user, max_tokens=220)
+
+
+def approver_brief(brief_input: str) -> str:
+    system = (
+        "You are a deal-desk approver advising a sales manager on a submitted "
+        "quote. In 2-3 short sentences: (1) state whether to approve, "
+        "conditionally approve, or push back; (2) cite the single biggest "
+        "concern; (3) name one mitigation the AE can do. No preamble, no fluff, "
+        "no markdown headers."
+    )
+    return _complete(system, brief_input, max_tokens=220)
