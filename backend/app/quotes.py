@@ -3,9 +3,10 @@ from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import func as sqlfunc, select
+from sqlalchemy import func as sqlfunc, or_, select
 from sqlalchemy.orm import Session
 
+from .auth import User, current_user, require_ae, require_manager
 from .config import settings
 from .db import get_session
 from .models import Catalogue, Quote, QuoteLine, Validation
@@ -188,36 +189,76 @@ def _next_number(db: Session) -> str:
 # ─── Quote endpoints ───────────────────────────────────────────────────────
 
 
+def _visible_to(user: User, query):
+    """Filter Quote rows by what this user can see."""
+    if user.role == "manager":
+        # Manager sees the queue + everything they decided on
+        return query.where(
+            or_(
+                Quote.status == "pending_manager",
+                Quote.decided_by == user.email,
+                Quote.decided_by == user.name,  # legacy: brief used name
+            )
+        )
+    # AE sees own quotes
+    return query.where(Quote.ae == user.email)
+
+
 @router.get("/quotes", response_model=list[QuoteOut])
-def list_quotes(db: Session = Depends(get_session)) -> list[QuoteOut]:
-    quotes = list(db.execute(select(Quote).order_by(Quote.id.desc())).scalars().all())
+def list_quotes(
+    db: Session = Depends(get_session),
+    user: User = Depends(current_user),
+) -> list[QuoteOut]:
+    stmt = _visible_to(user, select(Quote)).order_by(Quote.id.desc())
+    quotes = list(db.execute(stmt).scalars().all())
     return [_quote_summary(q, db) for q in quotes]
 
 
 @router.post("/quotes", response_model=QuoteDetailOut, status_code=201)
-def create_quote(body: QuoteHeaderIn, db: Session = Depends(get_session)) -> QuoteDetailOut:
-    quote = Quote(number=_next_number(db), customer=body.customer, ae=body.ae)
+def create_quote(
+    body: QuoteHeaderIn,
+    db: Session = Depends(get_session),
+    user: User = Depends(require_ae),
+) -> QuoteDetailOut:
+    quote = Quote(number=_next_number(db), customer=body.customer, ae=user.email)
     db.add(quote)
     db.commit()
     db.refresh(quote)
     return _quote_detail(quote, db)
 
 
-@router.get("/quotes/{quote_id}", response_model=QuoteDetailOut)
-def get_quote(quote_id: int, db: Session = Depends(get_session)) -> QuoteDetailOut:
+def _load_for(quote_id: int, user: User, db: Session) -> Quote:
     quote = db.get(Quote, quote_id)
     if not quote:
         raise HTTPException(status_code=404, detail="Quote not found")
-    return _quote_detail(quote, db)
+    if user.role == "ae" and quote.ae != user.email:
+        raise HTTPException(status_code=403, detail="Not your quote")
+    if user.role == "manager":
+        if (
+            quote.status != "pending_manager"
+            and quote.decided_by not in (user.email, user.name)
+        ):
+            raise HTTPException(status_code=403, detail="Quote not in your queue")
+    return quote
+
+
+@router.get("/quotes/{quote_id}", response_model=QuoteDetailOut)
+def get_quote(
+    quote_id: int,
+    db: Session = Depends(get_session),
+    user: User = Depends(current_user),
+) -> QuoteDetailOut:
+    return _quote_detail(_load_for(quote_id, user, db), db)
 
 
 @router.put("/quotes/{quote_id}", response_model=QuoteDetailOut)
 def update_quote(
-    quote_id: int, body: QuoteHeaderPatch, db: Session = Depends(get_session)
+    quote_id: int,
+    body: QuoteHeaderPatch,
+    db: Session = Depends(get_session),
+    user: User = Depends(require_ae),
 ) -> QuoteDetailOut:
-    quote = db.get(Quote, quote_id)
-    if not quote:
-        raise HTTPException(status_code=404, detail="Quote not found")
+    quote = _load_for(quote_id, user, db)
     for k, v in body.model_dump(exclude_unset=True).items():
         setattr(quote, k, v)
     db.commit()
@@ -226,10 +267,12 @@ def update_quote(
 
 
 @router.delete("/quotes/{quote_id}", status_code=204)
-def delete_quote(quote_id: int, db: Session = Depends(get_session)) -> None:
-    quote = db.get(Quote, quote_id)
-    if not quote:
-        raise HTTPException(status_code=404, detail="Quote not found")
+def delete_quote(
+    quote_id: int,
+    db: Session = Depends(get_session),
+    user: User = Depends(require_ae),
+) -> None:
+    quote = _load_for(quote_id, user, db)
     db.delete(quote)
     db.commit()
 
@@ -239,11 +282,12 @@ def delete_quote(quote_id: int, db: Session = Depends(get_session)) -> None:
 
 @router.post("/quotes/{quote_id}/lines", response_model=QuoteDetailOut, status_code=201)
 def add_line(
-    quote_id: int, body: QuoteLineIn, db: Session = Depends(get_session)
+    quote_id: int,
+    body: QuoteLineIn,
+    db: Session = Depends(get_session),
+    user: User = Depends(require_ae),
 ) -> QuoteDetailOut:
-    quote = db.get(Quote, quote_id)
-    if not quote:
-        raise HTTPException(status_code=404, detail="Quote not found")
+    quote = _load_for(quote_id, user, db)
     if not db.get(Catalogue, body.sku_id):
         raise HTTPException(status_code=400, detail=f"SKU not in catalogue: {body.sku_id}")
     line = QuoteLine(
@@ -270,7 +314,9 @@ def update_line(
     line_id: int,
     body: QuoteLinePatch,
     db: Session = Depends(get_session),
+    user: User = Depends(require_ae),
 ) -> QuoteDetailOut:
+    _load_for(quote_id, user, db)
     line = db.get(QuoteLine, line_id)
     if not line or line.quote_id != quote_id:
         raise HTTPException(status_code=404, detail="Line not found")
@@ -291,8 +337,12 @@ def update_line(
 
 @router.delete("/quotes/{quote_id}/lines/{line_id}", status_code=204)
 def delete_line(
-    quote_id: int, line_id: int, db: Session = Depends(get_session)
+    quote_id: int,
+    line_id: int,
+    db: Session = Depends(get_session),
+    user: User = Depends(require_ae),
 ) -> None:
+    _load_for(quote_id, user, db)
     line = db.get(QuoteLine, line_id)
     if not line or line.quote_id != quote_id:
         raise HTTPException(status_code=404, detail="Line not found")
@@ -345,11 +395,12 @@ def _evaluate_routing(quote: Quote, db: Session) -> tuple[str, list[str]]:
 
 @router.post("/quotes/{quote_id}/submit", response_model=QuoteDetailOut)
 def submit_quote(
-    quote_id: int, body: SubmitIn, db: Session = Depends(get_session)
+    quote_id: int,
+    body: SubmitIn,
+    db: Session = Depends(get_session),
+    user: User = Depends(require_ae),
 ) -> QuoteDetailOut:
-    quote = db.get(Quote, quote_id)
-    if not quote:
-        raise HTTPException(status_code=404, detail="Quote not found")
+    quote = _load_for(quote_id, user, db)
     if quote.status not in ("draft", "pending_manager", "rejected"):
         raise HTTPException(
             status_code=409, detail=f"Cannot submit a quote in status '{quote.status}'"
@@ -370,7 +421,10 @@ def submit_quote(
 
 @router.post("/quotes/{quote_id}/approve", response_model=QuoteDetailOut)
 def approve_quote(
-    quote_id: int, body: DecisionIn, db: Session = Depends(get_session)
+    quote_id: int,
+    body: DecisionIn,
+    db: Session = Depends(get_session),
+    user: User = Depends(require_manager),
 ) -> QuoteDetailOut:
     quote = db.get(Quote, quote_id)
     if not quote:
@@ -381,7 +435,7 @@ def approve_quote(
             detail=f"Only pending_manager quotes can be approved (status={quote.status})",
         )
     quote.status = "approved"
-    quote.decided_by = (body.decided_by or "").strip()
+    quote.decided_by = user.email
     quote.decided_at = datetime.utcnow()
     quote.decision_comment = body.decision_comment or ""
     db.commit()
@@ -487,16 +541,21 @@ def _build_brief(quote: Quote, db: Session) -> ApprovalBriefOut:
 
 
 @router.get("/quotes/{quote_id}/approval-brief", response_model=ApprovalBriefOut)
-def approval_brief(quote_id: int, db: Session = Depends(get_session)) -> ApprovalBriefOut:
-    quote = db.get(Quote, quote_id)
-    if not quote:
-        raise HTTPException(status_code=404, detail="Quote not found")
+def approval_brief(
+    quote_id: int,
+    db: Session = Depends(get_session),
+    user: User = Depends(current_user),
+) -> ApprovalBriefOut:
+    quote = _load_for(quote_id, user, db)
     return _build_brief(quote, db)
 
 
 @router.post("/quotes/{quote_id}/reject", response_model=QuoteDetailOut)
 def reject_quote(
-    quote_id: int, body: DecisionIn, db: Session = Depends(get_session)
+    quote_id: int,
+    body: DecisionIn,
+    db: Session = Depends(get_session),
+    user: User = Depends(require_manager),
 ) -> QuoteDetailOut:
     quote = db.get(Quote, quote_id)
     if not quote:
@@ -509,7 +568,7 @@ def reject_quote(
     if not (body.decision_comment or "").strip():
         raise HTTPException(status_code=400, detail="A rejection comment is required")
     quote.status = "rejected"
-    quote.decided_by = (body.decided_by or "").strip()
+    quote.decided_by = user.email
     quote.decided_at = datetime.utcnow()
     quote.decision_comment = body.decision_comment
     db.commit()

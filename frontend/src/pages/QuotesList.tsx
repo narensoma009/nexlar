@@ -5,6 +5,7 @@ import {
   ClipboardList,
   Clock,
   FileText,
+  LogOut,
   Plus,
   ShieldCheck,
   Sparkles,
@@ -23,6 +24,7 @@ import {
   uploadDhiCodes,
   uploadPhasingRules,
 } from "../api/validations";
+import { useAuth } from "../auth/AuthContext";
 import StatusBadge from "../components/StatusBadge";
 import StatCard from "../components/StatCard";
 import { currencyFull } from "../lib/status";
@@ -40,9 +42,12 @@ const UPLOADERS: Record<
 };
 
 export default function QuotesList() {
+  const { user, logout } = useAuth();
+  const isAE = user?.role === "ae";
+  const isManager = user?.role === "manager";
+
   const [quotes, setQuotes] = useState<QuoteSummary[]>([]);
   const [customer, setCustomer] = useState("");
-  const [ae, setAe] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [uploadStatus, setUploadStatus] = useState<string | null>(null);
@@ -65,7 +70,7 @@ export default function QuotesList() {
     setBusy(true);
     setError(null);
     try {
-      const q = await createQuote(customer.trim(), ae.trim());
+      const q = await createQuote(customer.trim(), user?.email ?? "");
       navigate(`/quotes/${q.id}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unknown error");
@@ -152,123 +157,166 @@ export default function QuotesList() {
         )}
 
         {/* Stats hero */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-          <StatCard
-            icon={AlertOctagon}
-            label="AE action (rejected)"
-            value={rejected.length}
-            tone="red"
-            sub={rejected.length === 0 ? "All clear" : "Open and resubmit"}
-          />
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {isAE && (
+            <StatCard
+              icon={AlertOctagon}
+              label="Action required (rejected)"
+              value={rejected.length}
+              tone="red"
+              sub={rejected.length === 0 ? "All clear" : "Open and resubmit"}
+            />
+          )}
           <StatCard
             icon={Clock}
-            label="Pending manager"
+            label={isManager ? "Awaiting your decision" : "Pending manager"}
             value={pending.length}
             tone="amber"
             sub={pipelineValue > 0 ? currencyFull(pipelineValue) + " in pipeline" : "—"}
           />
-          <StatCard
-            icon={ShieldCheck}
-            label="Auto-approved"
-            value={auto.length}
-            tone="green"
-          />
+          {isAE && (
+            <StatCard
+              icon={ShieldCheck}
+              label="Auto-approved"
+              value={auto.length}
+              tone="green"
+            />
+          )}
           <StatCard
             icon={ClipboardList}
-            label="Approved"
+            label={isManager ? "Approved by you" : "Approved"}
             value={approved.length}
             tone="emerald"
             sub={approvedValue > 0 ? currencyFull(approvedValue) + " booked" : "—"}
           />
-          <StatCard
-            icon={FileText}
-            label="Drafts"
-            value={drafts.length}
-            tone="slate"
-          />
+          {isAE ? (
+            <StatCard
+              icon={FileText}
+              label="Drafts"
+              value={drafts.length}
+              tone="slate"
+            />
+          ) : (
+            <StatCard
+              icon={AlertOctagon}
+              label="Rejected by you"
+              value={rejected.length}
+              tone="red"
+            />
+          )}
         </div>
 
-        {/* New quote */}
-        <section className="rounded-2xl bg-white border border-slate-200 p-4 shadow-sm">
-          <div className="flex items-center gap-2 mb-3">
-            <div className="h-7 w-7 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center">
-              <Plus size={16} />
+        {/* New quote (AE only) */}
+        {isAE && (
+          <section className="rounded-2xl bg-white border border-slate-200 p-4 shadow-sm">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="h-7 w-7 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center">
+                <Plus size={16} />
+              </div>
+              <div className="text-sm font-medium">New quote</div>
             </div>
-            <div className="text-sm font-medium">New quote</div>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <input
-              value={customer}
-              onChange={(e) => setCustomer(e.target.value)}
-              placeholder="Customer"
-              className="flex-1 min-w-[220px] rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            <input
-              value={ae}
-              onChange={(e) => setAe(e.target.value)}
-              placeholder="AE (optional)"
-              className="min-w-[180px] rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            <button
-              onClick={onCreate}
-              disabled={busy || !customer.trim()}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow hover:bg-blue-700 disabled:opacity-50"
-            >
-              <Plus size={16} /> Create
-            </button>
-          </div>
-        </section>
-
-        {/* Sections */}
-        <Section
-          title="AE action required — rejected"
-          subtitle="Open each quote to address the manager's notes, then re-submit."
-          tone="red"
-          count={rejected.length}
-          empty="No rejected quotes — nothing to act on."
-        >
-          {rejected.map((q) => (
-            <QuoteRow key={q.id} q={q} onDelete={() => onDelete(q.id)} />
-          ))}
-        </Section>
-
-        <Section
-          title="Pending manager approval"
-          subtitle="Each quote includes an LLM-generated approver brief with a risk score."
-          tone="amber"
-          count={pending.length}
-          empty="Nothing waiting on a manager."
-        >
-          {pending.map((q) => (
-            <QuoteRow key={q.id} q={q} onDelete={() => onDelete(q.id)} />
-          ))}
-        </Section>
-
-        <Section
-          title="Auto-approved"
-          tone="green"
-          count={auto.length}
-          empty="No auto-approved quotes yet."
-        >
-          {auto.map((q) => (
-            <QuoteRow key={q.id} q={q} onDelete={() => onDelete(q.id)} />
-          ))}
-        </Section>
-
-        {approved.length > 0 && (
-          <Section title="Approved" tone="emerald" count={approved.length}>
-            {approved.map((q) => (
-              <QuoteRow key={q.id} q={q} onDelete={() => onDelete(q.id)} />
-            ))}
-          </Section>
+            <div className="flex flex-wrap gap-2">
+              <input
+                value={customer}
+                onChange={(e) => setCustomer(e.target.value)}
+                placeholder="Customer"
+                className="flex-1 min-w-[220px] rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <button
+                onClick={onCreate}
+                disabled={busy || !customer.trim()}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow hover:bg-blue-700 disabled:opacity-50"
+              >
+                <Plus size={16} /> Create
+              </button>
+            </div>
+          </section>
         )}
 
-        {drafts.length > 0 && (
-          <Section title="Drafts" tone="slate" count={drafts.length}>
-            {drafts.map((q) => (
-              <QuoteRow key={q.id} q={q} onDelete={() => onDelete(q.id)} />
-            ))}
-          </Section>
+        {/* Sections — order varies by role */}
+        {isManager ? (
+          <>
+            <Section
+              title="Awaiting your decision"
+              subtitle="Open each quote to see the AI approver brief with risk score."
+              tone="amber"
+              count={pending.length}
+              empty="Inbox zero — no quotes waiting on you."
+            >
+              {pending.map((q) => (
+                <QuoteRow key={q.id} q={q} canDelete={false} onDelete={() => onDelete(q.id)} />
+              ))}
+            </Section>
+
+            {approved.length > 0 && (
+              <Section title="Approved by you" tone="emerald" count={approved.length}>
+                {approved.map((q) => (
+                  <QuoteRow key={q.id} q={q} canDelete={false} onDelete={() => onDelete(q.id)} />
+                ))}
+              </Section>
+            )}
+
+            {rejected.length > 0 && (
+              <Section title="Rejected by you" tone="red" count={rejected.length}>
+                {rejected.map((q) => (
+                  <QuoteRow key={q.id} q={q} canDelete={false} onDelete={() => onDelete(q.id)} />
+                ))}
+              </Section>
+            )}
+          </>
+        ) : (
+          <>
+            <Section
+              title="Action required — rejected"
+              subtitle="Open each quote to address the manager's notes, then re-submit."
+              tone="red"
+              count={rejected.length}
+              empty="No rejected quotes — nothing to act on."
+            >
+              {rejected.map((q) => (
+                <QuoteRow key={q.id} q={q} onDelete={() => onDelete(q.id)} />
+              ))}
+            </Section>
+
+            <Section
+              title="Pending manager"
+              subtitle="Submitted and waiting on a decision."
+              tone="amber"
+              count={pending.length}
+              empty="Nothing waiting on a manager."
+            >
+              {pending.map((q) => (
+                <QuoteRow key={q.id} q={q} onDelete={() => onDelete(q.id)} />
+              ))}
+            </Section>
+
+            <Section
+              title="Auto-approved"
+              tone="green"
+              count={auto.length}
+              empty="No auto-approved quotes yet."
+            >
+              {auto.map((q) => (
+                <QuoteRow key={q.id} q={q} onDelete={() => onDelete(q.id)} />
+              ))}
+            </Section>
+
+            {approved.length > 0 && (
+              <Section title="Approved" tone="emerald" count={approved.length}>
+                {approved.map((q) => (
+                  <QuoteRow key={q.id} q={q} onDelete={() => onDelete(q.id)} />
+                ))}
+              </Section>
+            )}
+
+            {drafts.length > 0 && (
+              <Section title="Drafts" tone="slate" count={drafts.length}>
+                {drafts.map((q) => (
+                  <QuoteRow key={q.id} q={q} onDelete={() => onDelete(q.id)} />
+                ))}
+              </Section>
+            )}
+          </>
         )}
 
         {error && (
@@ -323,7 +371,15 @@ function Section({
   );
 }
 
-function QuoteRow({ q, onDelete }: { q: QuoteSummary; onDelete: () => void }) {
+function QuoteRow({
+  q,
+  onDelete,
+  canDelete = true,
+}: {
+  q: QuoteSummary;
+  onDelete: () => void;
+  canDelete?: boolean;
+}) {
   return (
     <li>
       <Link
@@ -355,16 +411,18 @@ function QuoteRow({ q, onDelete }: { q: QuoteSummary; onDelete: () => void }) {
             </div>
           )}
         </div>
-        <button
-          onClick={(e) => {
-            e.preventDefault();
-            onDelete();
-          }}
-          className="opacity-0 group-hover:opacity-100 transition text-slate-400 hover:text-red-600 p-1"
-          title="Delete"
-        >
-          <Trash2 size={14} />
-        </button>
+        {canDelete && (
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              onDelete();
+            }}
+            className="opacity-0 group-hover:opacity-100 transition text-slate-400 hover:text-red-600 p-1"
+            title="Delete"
+          >
+            <Trash2 size={14} />
+          </button>
+        )}
       </Link>
     </li>
   );

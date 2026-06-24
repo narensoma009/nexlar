@@ -15,6 +15,8 @@ class Settings(BaseSettings):
 
     auto_approve_max_value: float = 500_000.0
 
+    auth_secret: str = "nexlara-dev-secret-change-me"
+
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=False)
 
 

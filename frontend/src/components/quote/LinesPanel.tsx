@@ -8,9 +8,16 @@ type Props = {
   lines: QuoteLine[];
   onChange: () => void;
   onAttachDhi?: (lineId: number) => void;
+  readOnly?: boolean;
 };
 
-export default function LinesPanel({ quoteId, lines, onChange, onAttachDhi }: Props) {
+export default function LinesPanel({
+  quoteId,
+  lines,
+  onChange,
+  onAttachDhi,
+  readOnly = false,
+}: Props) {
   const [busy, setBusy] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -52,7 +59,7 @@ export default function LinesPanel({ quoteId, lines, onChange, onAttachDhi }: Pr
       <div className="flex-1 min-h-0 overflow-y-auto">
         {lines.length === 0 ? (
           <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm text-slate-400">
-            Click a catalogue item on the left to add a line.
+            {readOnly ? "This quote has no lines." : "Click a catalogue item on the left to add a line."}
           </div>
         ) : (
           <ul className="flex flex-col gap-2">
@@ -84,7 +91,7 @@ export default function LinesPanel({ quoteId, lines, onChange, onAttachDhi }: Pr
                         {currencyFull(ln.line_total)}
                       </div>
                       <div className="mt-1 flex justify-end gap-2">
-                        {onAttachDhi && (
+                        {onAttachDhi && !readOnly && (
                           <button
                             onClick={() => onAttachDhi(ln.id)}
                             className="text-[11px] text-slate-500 hover:text-blue-600 hover:underline"
@@ -92,14 +99,16 @@ export default function LinesPanel({ quoteId, lines, onChange, onAttachDhi }: Pr
                             + DHI code
                           </button>
                         )}
-                        <button
-                          disabled={busy === ln.id}
-                          onClick={() => remove(ln.id)}
-                          className="text-slate-400 hover:text-red-600 disabled:opacity-50"
-                          title="Remove line"
-                        >
-                          <Trash2 size={14} />
-                        </button>
+                        {!readOnly && (
+                          <button
+                            disabled={busy === ln.id}
+                            onClick={() => remove(ln.id)}
+                            className="text-slate-400 hover:text-red-600 disabled:opacity-50"
+                            title="Remove line"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -112,12 +121,14 @@ export default function LinesPanel({ quoteId, lines, onChange, onAttachDhi }: Pr
                         type="number"
                         min={1}
                         value={ln.qty}
+                        disabled={readOnly}
                         onChange={(e) =>
                           patch(ln.id, { qty: Number(e.target.value) || 1 })
                         }
                         className={
                           "w-14 rounded border px-1 py-0.5 text-center " +
-                          (qtyOk ? "border-slate-300" : "border-red-400 bg-red-50")
+                          (qtyOk ? "border-slate-300" : "border-red-400 bg-red-50") +
+                          (readOnly ? " bg-slate-50 cursor-not-allowed" : "")
                         }
                       />
                     </label>
@@ -128,6 +139,7 @@ export default function LinesPanel({ quoteId, lines, onChange, onAttachDhi }: Pr
                         type="number"
                         min={1}
                         value={ln.phase}
+                        disabled={readOnly}
                         onChange={(e) =>
                           patch(ln.id, { phase: Number(e.target.value) || 1 })
                         }
@@ -135,7 +147,8 @@ export default function LinesPanel({ quoteId, lines, onChange, onAttachDhi }: Pr
                           "w-12 rounded border px-1 py-0.5 text-center " +
                           (phaseOk
                             ? "border-slate-300"
-                            : "border-amber-400 bg-amber-50")
+                            : "border-amber-400 bg-amber-50") +
+                          (readOnly ? " bg-slate-50 cursor-not-allowed" : "")
                         }
                       />
                       {ln.allowed_phases.length > 0 && (
@@ -149,22 +162,24 @@ export default function LinesPanel({ quoteId, lines, onChange, onAttachDhi }: Pr
                   <div className="flex flex-col gap-1">
                     <div className="flex items-center gap-1 text-[11px] text-slate-500">
                       <Tag size={11} /> Justification
-                      {!justOk && (
+                      {!justOk && !readOnly && (
                         <span className="text-amber-700 ml-1">· required for auto-approval</span>
                       )}
                     </div>
                     <textarea
                       value={ln.justification}
+                      disabled={readOnly}
                       onChange={(e) =>
                         patch(ln.id, { justification: e.target.value })
                       }
-                      placeholder="Why is this line included?"
+                      placeholder={readOnly ? "(no justification provided)" : "Why is this line included?"}
                       rows={2}
                       className={
                         "rounded-lg border px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 " +
                         (justOk
                           ? "border-slate-300"
-                          : "border-amber-300 bg-amber-50/40")
+                          : "border-amber-300 bg-amber-50/40") +
+                        (readOnly ? " bg-slate-50 cursor-not-allowed" : "")
                       }
                     />
                   </div>

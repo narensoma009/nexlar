@@ -30,8 +30,13 @@ import IssuesPanel from "../components/quote/IssuesPanel";
 import ApproverBrief from "../components/quote/ApproverBrief";
 import StatusBadge from "../components/StatusBadge";
 import { currencyFull } from "../lib/status";
+import { useAuth } from "../auth/AuthContext";
 
 export default function QuoteWorkspace() {
+  const { user } = useAuth();
+  const isAE = user?.role === "ae";
+  const isManager = user?.role === "manager";
+
   const { id } = useParams<{ id: string }>();
   const quoteId = Number(id);
   const [quote, setQuote] = useState<QuoteDetail | null>(null);
@@ -141,12 +146,10 @@ export default function QuoteWorkspace() {
   }
 
   async function onApprove() {
-    const decided_by = prompt("Manager name:");
-    if (decided_by === null) return;
     const decision_comment = prompt("Approval comment (optional):") ?? "";
     setError(null);
     try {
-      await approveQuote(quoteId, decided_by, decision_comment);
+      await approveQuote(quoteId, user?.name ?? "", decision_comment);
       await refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unknown error");
@@ -154,8 +157,6 @@ export default function QuoteWorkspace() {
   }
 
   async function onReject() {
-    const decided_by = prompt("Manager name:");
-    if (decided_by === null) return;
     const decision_comment = prompt("Rejection comment (required):");
     if (decision_comment === null || !decision_comment.trim()) {
       setError("Rejection comment is required");
@@ -163,7 +164,7 @@ export default function QuoteWorkspace() {
     }
     setError(null);
     try {
-      await rejectQuote(quoteId, decided_by, decision_comment);
+      await rejectQuote(quoteId, user?.name ?? "", decision_comment);
       await refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unknown error");
@@ -180,10 +181,12 @@ export default function QuoteWorkspace() {
 
   const isPending = quote?.status === "pending_manager";
   const canSubmit =
+    isAE &&
     quote &&
     (quote.status === "draft" ||
       quote.status === "pending_manager" ||
       quote.status === "rejected");
+  const canDecide = isManager && isPending;
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -221,7 +224,7 @@ export default function QuoteWorkspace() {
                 <Send size={14} /> Submit for approval
               </button>
             )}
-            {isPending && (
+            {canDecide && (
               <>
                 <button
                   onClick={onApprove}
@@ -270,10 +273,19 @@ export default function QuoteWorkspace() {
       )}
 
       <main className="flex-1 min-h-0">
-        <div className="mx-auto max-w-7xl p-4 grid grid-cols-1 lg:grid-cols-[340px_1fr_380px] gap-4 min-h-[70vh]">
-          <aside className="min-h-[60vh]">
-            <CatalogueBrowser onAdd={onAdd} />
-          </aside>
+        <div
+          className={
+            "mx-auto max-w-7xl p-4 grid grid-cols-1 gap-4 min-h-[70vh] " +
+            (isAE
+              ? "lg:grid-cols-[340px_1fr_380px]"
+              : "lg:grid-cols-[1fr_380px]")
+          }
+        >
+          {isAE && (
+            <aside className="min-h-[60vh]">
+              <CatalogueBrowser onAdd={onAdd} />
+            </aside>
+          )}
           <section className="min-h-[60vh]">
             {quote && (
               <LinesPanel
@@ -281,6 +293,7 @@ export default function QuoteWorkspace() {
                 lines={quote.lines}
                 onChange={refresh}
                 onAttachDhi={onAttachDhi}
+                readOnly={!isAE}
               />
             )}
           </section>

@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
+from .auth import User, current_user
 from .db import get_session
 from .models import (
     Asc606Rule,
@@ -351,7 +352,11 @@ def _run_validations(quote: Quote, db: Session) -> list[Validation]:
 
 
 @router.get("/quotes/{quote_id}/validations", response_model=list[ValidationOut])
-def list_validations(quote_id: int, db: Session = Depends(get_session)) -> list[Validation]:
+def list_validations(
+    quote_id: int,
+    db: Session = Depends(get_session),
+    user: User = Depends(current_user),
+) -> list[Validation]:
     return list(
         db.execute(
             select(Validation)
@@ -362,7 +367,11 @@ def list_validations(quote_id: int, db: Session = Depends(get_session)) -> list[
 
 
 @router.post("/quotes/{quote_id}/validate", response_model=list[ValidationOut])
-def validate_quote(quote_id: int, db: Session = Depends(get_session)) -> list[Validation]:
+def validate_quote(
+    quote_id: int,
+    db: Session = Depends(get_session),
+    user: User = Depends(current_user),
+) -> list[Validation]:
     quote = db.get(Quote, quote_id)
     if not quote:
         raise HTTPException(status_code=404, detail="Quote not found")
@@ -371,7 +380,10 @@ def validate_quote(quote_id: int, db: Session = Depends(get_session)) -> list[Va
 
 @router.post("/quotes/{quote_id}/dhi", response_model=ValidationOut, status_code=201)
 def attach_dhi(
-    quote_id: int, body: DhiAttachIn, db: Session = Depends(get_session)
+    quote_id: int,
+    body: DhiAttachIn,
+    db: Session = Depends(get_session),
+    user: User = Depends(current_user),
 ) -> Validation:
     line = db.get(QuoteLine, body.line_id)
     if not line or line.quote_id != quote_id:
