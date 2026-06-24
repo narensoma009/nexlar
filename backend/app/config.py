@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     azure_openai_deployment: str
     azure_openai_embedding_deployment: str
     azure_openai_api_version: str = "2024-10-21"
+    azure_openai_embedding_api_version: str = "2024-10-21"
 
     database_url: str
     embedding_dim: int = 1536

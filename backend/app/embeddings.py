@@ -1,29 +1,27 @@
-from openai import OpenAI
+import httpx
 
 from .config import settings
 
 
-def _foundry_base_url() -> str:
+def _embeddings_url() -> str:
     endpoint = settings.azure_openai_endpoint.rstrip("/")
-    if not endpoint.endswith("/openai/v1"):
-        endpoint = f"{endpoint}/openai/v1"
-    return endpoint
-
-
-_client = OpenAI(
-    api_key=settings.azure_openai_api_key,
-    base_url=_foundry_base_url(),
-)
+    deployment = settings.azure_openai_embedding_deployment
+    api_version = settings.azure_openai_embedding_api_version
+    return f"{endpoint}/openai/deployments/{deployment}/embeddings?api-version={api_version}"
 
 
 def embed_texts(texts: list[str]) -> list[list[float]]:
     if not texts:
         return []
-    resp = _client.embeddings.create(
-        model=settings.azure_openai_embedding_deployment,
-        input=texts,
-    )
-    return [d.embedding for d in resp.data]
+    with httpx.Client(timeout=60.0) as client:
+        resp = client.post(
+            _embeddings_url(),
+            headers={"api-key": settings.azure_openai_api_key},
+            json={"input": texts},
+        )
+        resp.raise_for_status()
+        data = resp.json()
+    return [item["embedding"] for item in data["data"]]
 
 
 def embed_text(text: str) -> list[float]:
