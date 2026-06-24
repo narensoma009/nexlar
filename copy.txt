@@ -7,3 +7,7 @@ az webapp config show \
 ANTENV=$(find /tmp -maxdepth 2 -type d -name antenv 2>/dev/null | head -1)
 echo "antenv: $ANTENV"
 ls $ANTENV/lib/python3.11/site-packages/ | grep -iE 'fastapi|uvicorn|gunicorn|pydantic|sqlalchemy' || echo "NONE FOUND"
+
+az webapp config appsettings list \
+  -g rde-pod6-rg -n pod6-nexlara-def3ffedhvb2drak \
+  --query "[?name=='PROJECT'].value" -o tsv
