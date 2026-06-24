@@ -23,7 +23,7 @@ def _complete(system: str, user: str, max_tokens: int = 400) -> str:
             {"role": "system", "content": system},
             {"role": "user", "content": user},
         ],
-        max_tokens=max_tokens,
+        max_completion_tokens=max_tokens,
     )
     return (resp.choices[0].message.content or "").strip()
 
