@@ -36,6 +36,7 @@ export default function QuoteWorkspace() {
   const [validations, setValidations] = useState<Validation[]>([]);
   const [validating, setValidating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -70,9 +71,14 @@ export default function QuoteWorkspace() {
   async function onValidate() {
     setValidating(true);
     setError(null);
+    setInfo(null);
     try {
       const v = await runValidation(quoteId);
       setValidations(v);
+      const openCount = v.filter((x) => x.state === "open").length;
+      if (openCount === 0) {
+        setInfo("Validated — no open issues.");
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unknown error");
     } finally {
@@ -92,16 +98,31 @@ export default function QuoteWorkspace() {
   }
 
   async function onSubmit() {
+    if (!quote) return;
+    if (quote.lines.length === 0) {
+      setError("Add at least one line before submitting.");
+      return;
+    }
     const comment = prompt(
-      "Submit comment for management (required to auto-approve):",
-      quote?.submit_comment || "",
+      "Submit comment for management (required):",
+      quote.submit_comment || "",
     );
     if (comment === null) return;
+    if (!comment.trim()) {
+      setError("Submit comment is required.");
+      return;
+    }
     setError(null);
+    setInfo(null);
     try {
-      await runValidation(quoteId); // refresh validations so the routing decision uses latest
-      await submitQuote(quoteId, comment);
+      await runValidation(quoteId); // refresh validations so routing uses latest
+      const updated = await submitQuote(quoteId, comment.trim());
       await refresh();
+      if (updated.status === "auto_approved") {
+        setInfo("Auto-approved.");
+      } else if (updated.status === "pending_manager") {
+        setInfo("Routed to manager queue: " + updated.routing_reasons.join("; "));
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unknown error");
     }
@@ -251,6 +272,11 @@ export default function QuoteWorkspace() {
       {error && (
         <div className="fixed bottom-24 left-6 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700 z-30">
           {error}
+        </div>
+      )}
+      {info && !error && (
+        <div className="fixed bottom-24 left-6 rounded-lg bg-blue-50 border border-blue-200 px-3 py-2 text-sm text-blue-700 z-30">
+          {info}
         </div>
       )}
     </div>

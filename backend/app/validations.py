@@ -236,6 +236,21 @@ def _run_validations(quote: Quote, db: Session) -> list[Validation]:
     for line in quote.lines:
         sku = skus.get(line.sku_id)
 
+        # Missing justification (mandatory field for auto-approve)
+        if not (line.justification or "").strip():
+            new_rows.append(
+                Validation(
+                    quote_id=quote.id,
+                    line_id=line.id,
+                    rule="line:missing_justification",
+                    severity="warn",
+                    message=(
+                        f"{sku.name if sku else line.sku_id}: justification is required. "
+                        f"Lines without a justification cannot be auto-approved."
+                    ),
+                )
+            )
+
         # Phasing: strict — line.phase must be in sku.allowed_phases (if any)
         if sku and sku.allowed_phases and line.phase not in sku.allowed_phases:
             new_rows.append(

@@ -51,6 +51,8 @@ export default function LinesPanel({ quoteId, lines, onChange, onAttachDhi }: Pr
               const phaseOk =
                 ln.allowed_phases.length === 0 ||
                 ln.allowed_phases.includes(ln.phase);
+              const justOk = (ln.justification || "").trim().length > 0;
+              const qtyOk = ln.qty >= 1;
               return (
                 <li key={ln.id} className="p-3 flex flex-col gap-2">
                   <div className="flex items-start justify-between gap-2">
@@ -93,7 +95,12 @@ export default function LinesPanel({ quoteId, lines, onChange, onAttachDhi }: Pr
                         onChange={(e) =>
                           patch(ln.id, { qty: Number(e.target.value) || 1 })
                         }
-                        className="w-16 rounded border border-slate-300 px-2 py-0.5"
+                        className={
+                          "w-16 rounded border px-2 py-0.5 " +
+                          (qtyOk
+                            ? "border-slate-300"
+                            : "border-red-400 bg-red-50")
+                        }
                       />
                     </label>
                     <label className="flex items-center gap-1">
@@ -119,15 +126,27 @@ export default function LinesPanel({ quoteId, lines, onChange, onAttachDhi }: Pr
                       )}
                     </label>
                   </div>
-                  <textarea
-                    value={ln.justification}
-                    onChange={(e) =>
-                      patch(ln.id, { justification: e.target.value })
-                    }
-                    placeholder="Why is this line included?"
-                    rows={2}
-                    className="rounded border border-slate-300 px-2 py-1 text-xs"
-                  />
+                  <div className="flex flex-col gap-1">
+                    <textarea
+                      value={ln.justification}
+                      onChange={(e) =>
+                        patch(ln.id, { justification: e.target.value })
+                      }
+                      placeholder="Why is this line included?"
+                      rows={2}
+                      className={
+                        "rounded border px-2 py-1 text-xs " +
+                        (justOk
+                          ? "border-slate-300"
+                          : "border-amber-400 bg-amber-50")
+                      }
+                    />
+                    {!justOk && (
+                      <span className="text-[11px] text-amber-700">
+                        Justification required for auto-approval.
+                      </span>
+                    )}
+                  </div>
                 </li>
               );
             })}
